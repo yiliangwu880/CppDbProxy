@@ -1,0 +1,6 @@
+//svr侦听地址
+dbproxy_svr_ip=127.0.0.1
+dbproxy_svr_port=55121
+
+is_daemon = 0
+
