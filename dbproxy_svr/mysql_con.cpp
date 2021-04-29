@@ -5,43 +5,140 @@
 #include <cppconn/prepared_statement.h>
 #include "parser.h"
 #include "mysql_con.h"
-#include "svr_util/include/string_tool.h"
+#include "svr_util/include/str_util.h"
 #include "DbServer.h"
 
 using namespace su;
 using namespace lc;
 using namespace std;
-using namespace google::protobuf;
 using namespace db;
-using UINT64 = ::uint64;
 
-
-void MysqlCon::CreateSelectSql(const db::ReqGetData &req, const string &table_name, string &sql_str)
+namespace
 {
+	//有值内容构建条件字符串，输入例如：“serverid = 201 and job = 1 and account = '1'”
+	string BuildSelectCond(const db::BaseTable &data)
+	{
+		string str;
+		const Table *table = TableCfg::Ins().GetTable(data.tableId);
+		L_COND(table, "");
+
+		int idx = 0;
+		for (const Field &field : table->m_vecField)
+		{
+			uint8_t *pField = (uint8_t*)&data + field.pOffset;
+			if (field.type == FieldType::t_bytes || field.type == FieldType::t_string)
+			{
+				std::string *pStr = (std::string *)pField;
+				if (pStr->empty())
+				{
+					continue;
+				}
+			}
+			else
+			{
+				static uint64_t zero = uint64_t();
+				if (0 == memcmp(pField, &zero, field.fieldSize))
+				{
+					continue;
+				}
+			}
+			if (idx > 0 )
+			{
+				str += " and ";
+			}
+			switch (field.type)
+			{
+			case FieldType::t_bytes:
+			case FieldType::t_string:
+				str += field.name + " = " + *pStr; //todo :blob内容，还没解决方案。
+				break;
+#define EASY_CODE(fieldType)\
+			case FieldType::t_##fieldType:\
+				str += field.name + " = " + StrNum::NumToStr((RealTypeTraits<FieldType::t_##fieldType>::Type *)pField);\
+				break;\
+
+					EASY_CODE(int32_t)
+					EASY_CODE(uint32_t)
+					EASY_CODE(int64_t)
+					EASY_CODE(uint64_t)
+					EASY_CODE(double)
+					EASY_CODE(float)
+
+#undef EASY_CODE
+			default:
+				L_COND(table, "");
+				break;
+			}
+			idx++
+		}
+	}
+
+	void SetFieldParam(const db::BaseTable &data, const Field &field, sql::PreparedStatement &pstmt)
+	{
+		uint8_t *pField = (uint8_t*)&data + field.pOffset;
+		switch (field.type)
+		{
+		default:
+			L_ERROR("unknow type %d", (int)field.type);
+			break;
+		case FieldType::t_uint32_t:
+			pstmt.setUInt(field.idx, *(uint32_t *)pField);
+			break;
+		case FieldType::t_int32_t:
+			pstmt.setInt(field.idx, *(int32_t *)pField);
+			break;
+		case FieldType::t_int64_t:
+			pstmt.setInt64(field.idx, *(int64_t *)pField);
+			break;
+		case FieldType::t_uint64_t:
+			pstmt.setUInt64(field.idx, *(uint64_t *)pField);
+			break;
+		case FieldType::t_double:
+			pstmt.setDouble(field.idx, *(double *)pField);
+			break;
+		case FieldType::t_bool:
+			pstmt.setBoolean(field.idx, *(bool *)pField);
+			break;
+		case FieldType::t_string:
+		case FieldType::t_bytes:
+			pstmt.setString(field.idx, *(std::string *)pField);
+			break;
+		}
+	}
+
+}
+
+void MysqlCon::CreateSelectSql(const db::BaseTable &data, const string &table_name, uint16_t limit_num, string &sql_str)
+{
+	//SELECT t.*
+	//	FROM GameDB.players t
+	//	WHERE serverid = 201 and job = 1 and account = '1'
+	//	LIMIT 5
 	sql_str = "SELECT ";
 	sql_str += "* FROM ";
 	sql_str += table_name;
-	if (!req.cond().empty())
+	string cond = BuildSelectCond(data);
+	if (!cond.empty())
 	{
-		sql_str += " WHERE " + req.cond();
+		sql_str += " WHERE " + cond;
 	}
-	if (req.limit_num() != 0)
+	if (limit_num != 0)
 	{
 		sql_str += " limit ";
-		sql_str += StringTool::NumToStr(req.limit_num());
+		sql_str += StringTool::NumToStr(limit_num);
 	}
 }
 
-bool MysqlCon::InitTable(const ReqInitTable &req, RspInitTable &rsp)
+bool MysqlCon::InitTable()
 {
-	rsp.Clear();
 	L_COND_F(m_con);
-	for (const string &msg_name : req.msg_name())
+	for (auto &v : TableCfg::Ins().GetAllTable())
 	{
+		const Table &table = v.second;
 		try {
 			string sql_str;
-			L_DEBUG("TryCreateTableSql msg_name=%s", msg_name.c_str());
-			if (!TryCreateTableSql(msg_name, sql_str))
+			L_DEBUG("TryCreateTableSql msg_name=%s", table.name.c_str());
+			if (!TryCreateTableSql(table, sql_str))
 			{
 				L_ERROR("CreateSql fail");
 				return false;
@@ -52,7 +149,7 @@ bool MysqlCon::InitTable(const ReqInitTable &req, RspInitTable &rsp)
 			int affect_row = pstmt->executeUpdate();
 			if (0 != affect_row)
 			{
-				L_ERROR("create table fail. affect_row=%d, table name[%s], sql[%s]", affect_row, msg_name.c_str(), sql_str.c_str());
+				L_ERROR("create table fail. affect_row=%d, table name[%s], sql[%s]", affect_row, table.name.c_str(), sql_str.c_str());
 				return false;
 			}
 		}
@@ -61,39 +158,29 @@ bool MysqlCon::InitTable(const ReqInitTable &req, RspInitTable &rsp)
 			return false;
 		}
 	}
-	rsp.set_is_ok(true);
 	return true;
 }
 
-bool MysqlCon::Insert(const db::ReqInsertData &req, ::uint64 &num_key, std::string &str_key)
+bool MysqlCon::Insert(const db::BaseTable &data)
 {
 	L_COND_F(m_con);
-	unique_ptr<google::protobuf::Message> msg = ProtoUtil::CreateMessage(req.msg_name());
-	if (nullptr == msg)
-	{
-		L_ERROR("create message fail. name=%s", req.msg_name().c_str());
-		return false;
-	}
-	L_COND_F(msg->ParseFromString(req.data()), "parse msg fail. msg_name = %s", req.msg_name().c_str());
-
-	if (!ProtoUtil::GetMsgMainKeyVal(*msg, num_key, str_key))
-	{
-		L_WARN("illegal message %s. no main key. ", req.msg_name().c_str());
-		return false;
-	}
-
+	const Table *table = TableCfg::Ins().GetTable(req.tableId);
+	L_COND_F(table);
 	//LOG_DEBUG("msg content=%s", msg->DebugString().c_str());
 	try {
 		string sql_str;
-		CreateInsertSql(*msg, sql_str);
+		CreateInsertSql(*data, sql_str);
 
 		//LOG_DEBUG("create insert sql=%s", sql_str.c_str());
 		unique_ptr< sql::PreparedStatement > pstmt(m_con->prepareStatement(sql_str));
-		SetInsertPreparePara(*pstmt, *msg);
+		for (const Field &field : table->m_vecField)
+		{
+			SetFieldParam(*data, field, *pstmt);
+		}
 		int affect_row = pstmt->executeUpdate();
 		if (1 != affect_row)
 		{
-			L_ERROR("insert table fail. row=%d, table name[%s]", affect_row, req.msg_name().c_str());
+			L_ERROR("insert table fail. row=%d, table name[%s]", affect_row, table.name.c_str());
 			return false;
 		}
 		return true;
@@ -104,36 +191,33 @@ bool MysqlCon::Insert(const db::ReqInsertData &req, ::uint64 &num_key, std::stri
 	}
 }
 
-bool MysqlCon::Update(const db::ReqUpdateData &req, ::uint64 &num_key, std::string &str_key)
+bool MysqlCon::Update(const db::BaseTable &data)
 {
+	const Table *table = TableCfg::Ins().GetTable(data.tableId);
+	L_COND_F(table);
 	L_COND_F(m_con);
-	unique_ptr<google::protobuf::Message> msg = ProtoUtil::CreateMessage(req.msg_name());
-	if (nullptr == msg)
-	{
-		L_ERROR("create message fail. name=%s", req.msg_name().c_str());
-		return false;
-	}
-	L_COND_F(msg->ParseFromString(req.data()), "parse msg fail. msg_name = %s", req.msg_name().c_str());
-	if (!ProtoUtil::GetMsgMainKeyVal(*msg, num_key, str_key))
-	{
-		L_WARN("illegal message %s. no main key. ", req.msg_name().c_str());
-		return false;
-	}
-
 	try {
 		string sql_str;
-		if (!CreateUpdateSql(*msg, sql_str))
+		if (!CreateUpdateSql(*data, sql_str))
 		{
 			L_ERROR("create update sql fail");
 			return false;
 		}
 		L_DEBUG("create update sql=%s", sql_str.c_str());
 		unique_ptr< sql::PreparedStatement > pstmt(m_con->prepareStatement(sql_str));
-		SetUpdatePreparePara(*pstmt, *msg);
+		for (const Field &field : table->m_vecField)
+		{
+			uint8_t *pField = (uint8_t*)&data + field.pOffset;
+			if (KeyType::MAIN == field.keyType)
+			{
+				continue;
+			}
+			SetFieldParam(*data, field, *pstmt);
+		}
 		int affect_row = pstmt->executeUpdate();
 		if (1 != affect_row)
 		{
-			L_ERROR("update table fail. row=%d, table name[%s]", affect_row, req.msg_name().c_str());
+			L_ERROR("update table fail. row=%d, table name[%s]", affect_row, data.msg_name().c_str());
 			return false;
 		}
 		return true;
@@ -144,178 +228,8 @@ bool MysqlCon::Update(const db::ReqUpdateData &req, ::uint64 &num_key, std::stri
 	}
 }
 
-namespace
-{
-	class DataBuf : public std::streambuf
-	{
-	public:
-		DataBuf() {}
 
-		DataBuf(char * d, size_t s) {
-			setg(d, d, d + s);
-		}
 
-		void InitBuf(char * d, size_t s) {
-			setg(d, d, d + s);
-		}
-	};
-
-	int GetType(FieldDescriptor::Type fd_type)
-	{
-		switch (fd_type)
-		{
-		default:
-			L_ERROR("unknow type %d", (int)fd_type);
-			return sql::DataType::INTEGER;
-		case FieldDescriptor::TYPE_MESSAGE:
-			return sql::DataType::BINARY;
-			break;
-		case FieldDescriptor::TYPE_DOUBLE:
-			return sql::DataType::DOUBLE;
-			break;
-		case FieldDescriptor::TYPE_FLOAT:
-			return sql::DataType::DOUBLE;
-			break;
-		case FieldDescriptor::TYPE_INT64:
-		case FieldDescriptor::TYPE_SINT64:
-		case FieldDescriptor::TYPE_SFIXED64:
-			return sql::DataType::BIGINT;
-			break;
-		case FieldDescriptor::TYPE_UINT64:
-		case FieldDescriptor::TYPE_FIXED64:
-			return sql::DataType::BIGINT;
-			break;
-		case FieldDescriptor::TYPE_FIXED32:
-		case FieldDescriptor::TYPE_UINT32:
-			return sql::DataType::INTEGER;
-			break;
-		case FieldDescriptor::TYPE_INT32:
-		case FieldDescriptor::TYPE_SFIXED32:
-		case FieldDescriptor::TYPE_SINT32:
-			return sql::DataType::INTEGER;
-			break;
-		case FieldDescriptor::TYPE_ENUM:
-			return sql::DataType::INTEGER;
-			break;
-		case FieldDescriptor::TYPE_BOOL:
-			return sql::DataType::TINYINT;
-			break;
-		case FieldDescriptor::TYPE_STRING:
-			return sql::DataType::VARCHAR;
-			break;
-		case FieldDescriptor::TYPE_BYTES:
-			return sql::DataType::BINARY;
-			break;
-		}
-	}
-
-	void SetFieldParam(google::protobuf::Message &msg, const FieldDescriptor &field, sql::PreparedStatement &pstmt, int idx)
-	{
-		const Reflection* rfl = msg.GetReflection();
-		L_COND(rfl);
-		if (field.is_repeated())
-		{
-			L_ERROR("not support repeated lable");
-			return;
-		}
-		if (!rfl->HasField(msg, &field))
-		{
-			pstmt.setNull(idx, GetType(field.type()));
-			return;
-		}
-
-		switch (field.type())
-		{
-		default:
-			L_ERROR("unknow type %d", (int)field.type());
-			break;
-		case FieldDescriptor::TYPE_DOUBLE:
-			pstmt.setDouble(idx, rfl->GetDouble(msg, &field));
-			break;
-		case FieldDescriptor::TYPE_FLOAT:
-			pstmt.setDouble(idx, rfl->GetFloat(msg, &field));
-			break;
-		case FieldDescriptor::TYPE_INT64:
-		case FieldDescriptor::TYPE_SINT64:
-		case FieldDescriptor::TYPE_SFIXED64:
-			pstmt.setInt64(idx, rfl->GetInt64(msg, &field));
-			break;
-		case FieldDescriptor::TYPE_UINT64:
-		case FieldDescriptor::TYPE_FIXED64:
-			pstmt.setUInt64(idx, rfl->GetUInt64(msg, &field));
-			break;
-		case FieldDescriptor::TYPE_FIXED32:
-		case FieldDescriptor::TYPE_UINT32:
-			pstmt.setUInt(idx, rfl->GetUInt32(msg, &field));
-			break;
-		case FieldDescriptor::TYPE_INT32:
-		case FieldDescriptor::TYPE_SFIXED32:
-		case FieldDescriptor::TYPE_SINT32:
-			pstmt.setInt(idx, rfl->GetInt32(msg, &field));
-			break;
-		case FieldDescriptor::TYPE_ENUM:
-		{
-			const EnumValueDescriptor* ev = rfl->GetEnum(msg, &field);
-			if (nullptr == ev)
-			{
-				L_ERROR("nullptr == ev");
-				break;
-			}
-			pstmt.setInt(idx, ev->number());
-			break;
-		}
-		case FieldDescriptor::TYPE_BOOL:
-			pstmt.setBoolean(idx, rfl->GetBool(msg, &field));
-			break;
-		case FieldDescriptor::TYPE_STRING:
-		case FieldDescriptor::TYPE_BYTES:
-			pstmt.setString(idx, rfl->GetString(msg, &field));
-			break;
-		case FieldDescriptor::TYPE_MESSAGE:
-		{
-			Message* chiledMsg = rfl->MutableMessage(&msg, &field);
-			L_COND(chiledMsg);
-			string s = chiledMsg->SerializeAsString();
-			pstmt.setString(idx, s);
-
-			//别删，如果字符处理不了的字符，就用下面的。
-			//{
-			//	char str[MAX_SQL_STR_SIZE];
-			//	bool r = chiledMsg->SerializeToArray(str, sizeof(str));
-			//	if (!r)
-			//	{
-			//		L_ERROR("SerializeToArray fail");
-			//		break;
-			//	}
-
-			//	DataBuf buffer;
-			//	std::istream blobStream(&buffer);
-			//	buffer.InitBuf(str, chiledMsg->ByteSize());
-			//	blobStream.rdbuf(&buffer);
-			//	pstmt.setBlob(idx, &blobStream);
-			//}
-			break;
-		}
-		} //end switch (field.type())
-	}
-
-}
-
-void MysqlCon::SetInsertPreparePara(sql::PreparedStatement &pstmt, google::protobuf::Message &msg)
-{
-	const Descriptor* des = msg.GetDescriptor();
-	L_COND(des);
-
-	int cnt = des->field_count();
-	L_COND(cnt >= 1);
-
-	for (int i = 0; i < cnt; i++)
-	{
-		const FieldDescriptor* field = des->field(i);
-		SetFieldParam(msg, *field, pstmt, i + 1);
-	}
-	return;
-}
 
 MysqlCon::~MysqlCon()
 {
@@ -353,69 +267,43 @@ bool MysqlCon::ConnectDb(const Cfg &cfg)
 	}
 }
 
-bool MysqlCon::TryCreateTableSql(const std::string &msg_name, std::string &sql_str)
+bool MysqlCon::TryCreateTableSql(const db::Table &table, std::string &sql_str)
 {
-	const Descriptor* des = DescriptorPool::generated_pool()->FindMessageTypeByName(msg_name);
-	if (nullptr == des)
-	{
-		L_ERROR("find msg Descriptor fail. msg name=%s", msg_name.c_str());
-		return false;
-	}
-	if (0 == des->field_count())
-	{
-		L_ERROR("msg no field. msg name=%s", msg_name.c_str());
-		return false;
-	}
-
-
 	sql_str = "CREATE TABLE IF NOT EXISTS `";
-	sql_str += des->name(); //不用 msg_name 去掉命名空间, 因为表名有.符号会导致insert sql语句查表名失败
+	sql_str += table.name;
 	sql_str += "` (";
-	
-	int cnt = des->field_count();
+
 	string main_key;
-	VecStr index_key;
-	for (int i = 0; i < cnt; i++)
+	vector<string> index_key;
+	for (auto &v : table.m_allField)
 	{
+		const std::string &name = v.first;
+		const db::Field &field = v.second;
 		//每个域 字符串模板 = "`a` varchar(11) NOT NULL,"
-		const FieldDescriptor* field = des->field(i);
-		if (nullptr == field)
-		{
-			L_ERROR("unknow error %d", i);
-			return false;
-		}
-		if (field->is_repeated())
-		{
-			L_ERROR("not support repeated field");
-			return false;
-		}
-		
 		sql_str += "`";
-		sql_str += field->name();
+		sql_str += name;
 		sql_str += "` ";
 
-		KeyType key_type;
-		bool is_unique = false; 
+		bool is_unique = false;
 		{
-			ProtoUtil::GetFieldKeyOpt(*des, field->name(), key_type);
-			if (db::K_MAIN_KEY == key_type)
+			if (db::KeyType::MAIN == field.keyType)
 			{
-				main_key = field->name();
+				main_key = name;
 				is_unique = true;
 			}
-			else if (db::K_INDEX == key_type)
+			else if (db::KeyType::INDEX == field.keyType)
 			{
-				index_key.push_back(field->name());
+				index_key.push_back(name);
 				is_unique = true;
 			}
 		}
-		sql_str += GetCreateTypeStr(field->type(), is_unique);
+		sql_str += GetCreateTypeStr(field.type, is_unique);
 		sql_str += ",";
-		
+
 	}
 	if (main_key.empty())
 	{
-		L_ERROR("msg main key need set field opt [(OptKey)=K_MAIN_KEY]. msg name=%s", msg_name.c_str());
+		L_ERROR("miss main key. msg name=%s", table.name.c_str());
 		return false;
 	}
 	sql_str += "PRIMARY KEY(`" + main_key + "`)";
@@ -427,72 +315,43 @@ bool MysqlCon::TryCreateTableSql(const std::string &msg_name, std::string &sql_s
 	return true;
 }
 
-bool MysqlCon::SetField(Message& msg, const FieldDescriptor &field, const sql::ResultSet& res)
-{
-	const Reflection* rfl = msg.GetReflection();
-	L_COND_F(rfl);
 
-	if (field.is_repeated())
-	{
-		L_ERROR("not support repeated field");
-		return false;
-	}
-	if (res.isNull(field.name()))
+bool MysqlCon::SetField(BaseTable &data, const Field &field, const sql::ResultSet& res)
+{
+	uint8_t *pField = (uint8_t*)&data + field.pOffset;
+
+	if (res.isNull(field.name))
 	{
 		return true;
 	}
 	try {
-		switch (field.type())
+		switch (field.type)
 		{
 		default:
 			L_ERROR("unknow type %d", (int)field.type());
 			return false;
-		case FieldDescriptor::TYPE_DOUBLE:
-			rfl->SetDouble(&msg, &field, (double)res.getDouble(field.name()));
+		case FieldType::t_double:
+			*(double *)pField = res.getDouble(field.name);
 			break;
-		case FieldDescriptor::TYPE_FLOAT:
-			rfl->SetFloat(&msg, &field, (float)res.getDouble(field.name()));
+		case FieldType::t_int32_t:
+			*(int32_t *)pField = res.getInt(field.name);
 			break;
-		case FieldDescriptor::TYPE_INT64:
-		case FieldDescriptor::TYPE_SINT64:
-		case FieldDescriptor::TYPE_SFIXED64:
-			rfl->SetInt64(&msg, &field, res.getInt64(field.name()));
+		case FieldType::t_uint32_t:
+			*(uint32_t *)pField = res.getUInt(field.name);
 			break;
-		case FieldDescriptor::TYPE_UINT64:
-		case FieldDescriptor::TYPE_FIXED64:
-			rfl->SetUInt64(&msg, &field, res.getUInt64(field.name()));
+		case FieldType::t_int64_t:
+			*(int64_t *)pField = res.getInt64(field.name);
 			break;
-		case FieldDescriptor::TYPE_FIXED32:
-		case FieldDescriptor::TYPE_UINT32:
-			rfl->SetUInt32(&msg, &field, res.getUInt(field.name()));
+		case FieldType::t_uint64_t:
+			*(uint64_t *)pField = res.getUInt64(field.name);
 			break;
-		case FieldDescriptor::TYPE_INT32:
-		case FieldDescriptor::TYPE_SFIXED32:
-		case FieldDescriptor::TYPE_SINT32:
-			rfl->SetInt32(&msg, &field, res.getInt(field.name()));
+		case FieldType::t_bool:
+			*(bool *)pField = res.getBoolean(field.name);
 			break;
-		case FieldDescriptor::TYPE_ENUM:
-		{
-			const EnumDescriptor *pEnumDes = field.enum_type();
-			const EnumValueDescriptor* pV = pEnumDes->FindValueByNumber(res.getInt(field.name()));
-			if (nullptr == pV)
-			{
-				L_ERROR("can't find Enum value. value=%d", res.getInt(field.name()));
-				break;
-			}
-			rfl->SetEnum(&msg, &field, pV);
-		}
-		break;
-		case FieldDescriptor::TYPE_BOOL:
-			rfl->SetBool(&msg, &field, res.getBoolean(field.name()));
+		case FieldType::t_string:
+			*(string *)pField = res.getString(field.name).asStdString();
 			break;
-		case FieldDescriptor::TYPE_STRING:
-			rfl->SetString(&msg, &field, res.getString(field.name()));
-			break;
-		case FieldDescriptor::TYPE_BYTES:
-			rfl->SetString(&msg, &field, res.getString(field.name()));
-			break;
-		case FieldDescriptor::TYPE_MESSAGE:
+		case FieldType::t_bytes:
 		{
 			unique_ptr<std::istream> inStream(res.getBlob(field.name()));
 			if (nullptr == inStream)
@@ -500,30 +359,15 @@ bool MysqlCon::SetField(Message& msg, const FieldDescriptor &field, const sql::R
 				L_ERROR("res.getBlob() fail field.name()=%s", field.name().c_str());
 				return false;
 			}
-			//NULL不解析消息
-			if (res.wasNull())
-			{
-				return true;
-			}
-			Message* chiledMsg = rfl->MutableMessage(&msg, &field);
-			if (nullptr == chiledMsg)
-			{
-				L_ERROR("MutableMessage fail field.name()=%s", field.name().c_str());
-				return false;
-			}
-
-			if (!chiledMsg->ParseFromIstream(inStream.get()))
-			{
-				L_ERROR("解析失败！");
-				return false;
-			}
+			string &str = *(string *)pField;
+			str.assign(std::istreambuf_iterator<char>{inStream}, std::istreambuf_iterator<char>{});
 			break;
 		}
-		}//end switch (field.type())
+		}
 	}
 	catch (sql::InvalidArgumentException e) {
 		//结果集中没有改字段，不进行设置
-		L_ERROR("can not set filed %s, ", field.name().c_str());
+		L_ERROR("can not set filed %s, ", field.name.c_str());
 		L_ERROR("%s, MySQL error code:%d, SQLState:%d", e.what(), e.getErrorCode(), e.getSQLStateCStr());
 		return false;
 	}
@@ -534,81 +378,48 @@ bool MysqlCon::SetField(Message& msg, const FieldDescriptor &field, const sql::R
 	return true;
 }
 
-void MysqlCon::SetUpdatePreparePara(sql::PreparedStatement &pstmt, google::protobuf::Message &msg)
+
+
+bool MysqlCon::CreateUpdateSql(const db::BaseTable &data, std::string &sql_str)
 {
-	const Descriptor* des = msg.GetDescriptor();
-	L_COND(des);
-	const Reflection* rfl = msg.GetReflection();
-	L_COND(rfl);
-	int cnt = des->field_count();
-	L_COND(cnt>=1);
-
-	int idx = 1;
-	for (int i = 0; i < cnt; i++)
-	{
-		const FieldDescriptor* field = des->field(i);
-		if (!rfl->HasField(msg, field))
-		{
-			continue;
-		}
-
-		KeyType key_type;
-		ProtoUtil::GetFieldKeyOpt(*des, field->name(), key_type);
-		if (db::K_MAIN_KEY == key_type)
-		{
-			continue;
-		}
-		SetFieldParam(msg, *field, pstmt, idx);
-		idx++;
-	}
-
-	return;
-}
-
-bool MysqlCon::CreateUpdateSql(const google::protobuf::Message &msg, std::string &sql_str)
-{
-	const Descriptor* des = msg.GetDescriptor();
-	const Reflection* ref = msg.GetReflection();
-	int cnt = des->field_count();
-	L_COND_F(des);
-	L_COND_F(ref);
-	L_COND_F(cnt >= 1);
+	const Table *table = TableCfg::Ins().GetTable(data.tableId);
+	L_COND_F(table);
 
 	sql_str += "UPDATE ";
-	sql_str += des->name();
+	sql_str += table->name;
 	sql_str += " SET ";
 
 	bool need_comma = false;
 	string str_key;
-	UINT64 num_key = 0; 
-	const FieldDescriptor* key_field = nullptr;
-	for (int i = 0; i < cnt; i++)
+	uint64_t num_key = 0; 
+	const Field *key_field = nullptr;//主键描述
+	for (const Field &field : table->m_vecField)
 	{
-		const FieldDescriptor* field = des->field(i);
-		if (!ref->HasField(msg, field))
+		uint8_t *pField = (uint8_t*)&data + field.pOffset;
+		if (KeyType::MAIN == field.keyType)
 		{
-			continue;
-		}
-		KeyType key_type;
-		ProtoUtil::GetFieldKeyOpt(*des, field->name(), key_type);
-		if (db::K_MAIN_KEY == key_type)
-		{
-			if (FieldDescriptor::TYPE_STRING == field->type())
+			if (FieldType::t_string == field.type)
 			{
-				str_key = ref->GetString(msg, field);
+				str_key = *(string *)pField;
 			}
-			else//其他一致认为是uint64处理
+			else(FieldType::t_uint64_t == field.type || FieldType::t_int64_t == field.type)
 			{
-				num_key = ref->GetUInt64(msg, field);
+				num_key = *(uint64_t *)pField;
 			}
-			key_field = field;
+			else
+			{
+				//暂时不开发其他类型主键
+				L_ERROR("main key must be uint64");
+				return false;
+			}
+			key_field = &field;
 			continue;
 		}
 		if (need_comma)
 		{
 			sql_str += ",";
 		}
-		sql_str += field->name();
+		sql_str += field.name;
 		sql_str += "=?";
 		need_comma = true;
 	}
@@ -617,13 +428,13 @@ bool MysqlCon::CreateUpdateSql(const google::protobuf::Message &msg, std::string
 	char where[1000]; 
 	if (0 == num_key)
 	{
-		str_key = ref->GetString(msg, key_field);
-		snprintf(where, sizeof(where), "WHERE %s='%s'  limit 1", key_field->name().c_str(), str_key.c_str());
+		str_key = ref->GetString(data, key_field);
+		snprintf(where, sizeof(where), "WHERE %s='%s'  limit 1", key_field->name.c_str(), str_key.c_str());
 	}
 	else//其他一致认为是uint64处理
 	{
-		num_key = ref->GetUInt64(msg, key_field);
-		snprintf(where, sizeof(where), "WHERE %s=%llu  limit 1", key_field->name().c_str(), num_key);
+		num_key = ref->GetUInt64(data, key_field);
+		snprintf(where, sizeof(where), "WHERE %s=%llu  limit 1", key_field->name.c_str(), num_key);
 	}
 	sql_str += where;
 
@@ -631,22 +442,15 @@ bool MysqlCon::CreateUpdateSql(const google::protobuf::Message &msg, std::string
 	return true;
 }
 
-bool MysqlCon::Get(const db::ReqGetData &req, InnerSvrCon &con)
+bool MysqlCon::Query(const db::BaseTable &data, QueryResultRowCb cb)
 {
-	L_COND_F(m_con); 
-	unique_ptr<google::protobuf::Message> msg = ProtoUtil::CreateMessage(req.msg_name());
-	if (nullptr == msg)
-	{
-		L_ERROR("create message fail. name=%s", req.msg_name().c_str());
-		return false;
-	}
-	const google::protobuf::Descriptor* des = msg->GetDescriptor();
-	L_COND_F(des);
+	L_COND_F(m_con);
+	const Table *table = TableCfg::Ins().GetTable(data.tableId);
+	L_COND_F(table);
 
 	try {
-
 		string sql_str;
-		CreateSelectSql(req, des->name(), sql_str);
+		CreateSelectSql(data, table->name, sql_str);
 //		L_DEBUG("select sql [%s]", sql_str.c_str());
 		unique_ptr< sql::Statement > stmt(m_con->createStatement());
 		stmt->execute(sql_str);
@@ -654,9 +458,6 @@ bool MysqlCon::Get(const db::ReqGetData &req, InnerSvrCon &con)
 		int row_num = 0;
 		do
 		{
-			db::RspGetData rsp;
-			rsp.set_msg_name(req.msg_name());
-
 			unique_ptr<sql::ResultSet> ret(stmt->getResultSet());
 			if (0 == row_num && nullptr == ret) //一个数据都没有
 			{
@@ -664,28 +465,23 @@ bool MysqlCon::Get(const db::ReqGetData &req, InnerSvrCon &con)
 				return false;
 			}
 			while (ret->next()) {
-				msg->Clear();
-				int count = des->field_count();
-				for (int i = 0; i < count; i++)
+				unique_ptr<db::BaseTable> pData = table->factor();
+				for (const Field &field : table.m_vecField)
 				{
-					const FieldDescriptor* field = des->field(i);
-					if (!SetField(*msg, *field, *ret))
+					if (!SetField(*pData, field, *ret))
 					{
 						L_ERROR("set field failed, filed_name[%s]", field->name().c_str());
 						return false;
 					}
 				}
-				rsp.add_data(msg->SerializeAsString());
+				cb(*pData);
 			}
 			row_num++;
 
 			if (!stmt->getMoreResults())
 			{
-				rsp.set_is_last(true);
-				con.Send(rsp);
 				break;
 			}
-			con.Send(rsp);
 		} while(true);
 		return true;
 	}
@@ -695,42 +491,35 @@ bool MysqlCon::Get(const db::ReqGetData &req, InnerSvrCon &con)
 	}
 }
 
-bool MysqlCon::Del(const db::ReqDelData &req, db::RspDelData &rsp)
+bool MysqlCon::Del(const db::BaseTable &data)
 {
-	rsp.Clear();
-	rsp.set_msg_name(req.msg_name());
-	rsp.set_num_key(req.num_key());
-	rsp.set_str_key(req.str_key());
 	L_COND_F(m_con);
-
-	const Descriptor* des = DescriptorPool::generated_pool()->FindMessageTypeByName(req.msg_name());
-	if (nullptr == des)
-	{
-		L_WARN("illegal msg name. %s", req.msg_name().c_str());
-		return false;
-	}
+	const Table *table = TableCfg::Ins().GetTable(data.tableId);
+	L_COND_F(table);
 	try {
 		string sql_str = "delete from ";
-		sql_str += des->name();
+		sql_str += table->name;
 		sql_str += " where ";
 
 		{//build cond
-			string key_name = ProtoUtil::GetMsgMainKeyName(*des);
-			if (key_name.empty())
-			{
-				L_WARN("illegal message %s. no main key. ", req.msg_name().c_str());
-				return false;
-			}
+			const Field *field = table->GetMainKey();
+			L_COND_F(field);
+			uint8_t *pField = (uint8_t*)&data + field->pOffset;
 
-			sql_str += key_name;
+			sql_str += field->name;
 			sql_str += "=";
-			if (req.num_key() != 0)
+			if (field->type == FieldType::t_string)
 			{
-				sql_str += StringTool::NumToStr(req.num_key());
+				sql_str += "'" + req.str_key() + "'";
+			}
+			else if(field->type == FieldType::t_uint64_t || field->type == FieldType::t_int64_t)
+			{
+				sql_str += StringTool::NumToStr(*(uint64_t *)pField);
 			}
 			else
 			{
-				sql_str += "'"+req.str_key()+"'";
+				L_ERROR("no main key");
+				return false;
 			}
 		}
 
@@ -742,7 +531,6 @@ bool MysqlCon::Del(const db::ReqDelData &req, db::RspDelData &rsp)
 		{
 			L_DEBUG("del row == 0");
 		}
-		rsp.set_del_num(affect_row);
 		return true;
 	}
 	catch (sql::SQLException &e) {
@@ -751,45 +539,28 @@ bool MysqlCon::Del(const db::ReqDelData &req, db::RspDelData &rsp)
 	}
 }
 
-bool MysqlCon::ExecuteSql(const std::string &sql_str)
+bool MysqlCon::CreateInsertSql(const db::BaseTable &data, std::string &sql_str)
 {
-	L_COND_F(m_con);
-	try {
-		unique_ptr< sql::Statement > stmt(m_con->createStatement());
-		stmt->execute(sql_str);
-		return true;
-	}
-	catch (sql::SQLException &e) {
-		L_ERROR("%s, MySQL error code:%d, SQLState:%s", e.what(), e.getErrorCode(), e.getSQLStateCStr());
-		return false;
-	}
-}
-
-bool MysqlCon::CreateInsertSql(const google::protobuf::Message &msg, std::string &sql_str)
-{
-	const Descriptor* des = msg.GetDescriptor();
-	L_COND_F(des);
-	int count = des->field_count();
-	L_COND_F(count>0);
+	const Table *table = TableCfg::Ins().GetTable(data.tableId);
+	L_COND_F(table);
 
 	sql_str += "INSERT INTO ";
-	sql_str += des->name();
+	sql_str += table->name;
 	sql_str += "(";
 
 	//循环拷贝名字
-	for (int i = 0; i < count; i++)
+	for (const Field &field : table->m_vecField)
 	{
-		const FieldDescriptor* field = des->field(i);
 		if (i > 0)
 		{
 			sql_str += ",";
 		}
-		sql_str += field->name();
+		sql_str += field->name;
 	}
 
 	sql_str += ") VALUES(";
 
-	for (int i = 0; i < count; i++)
+	for (const Field &field : table->m_vecField)
 	{
 		if (i > 0)
 		{
@@ -805,47 +576,40 @@ bool MysqlCon::CreateInsertSql(const google::protobuf::Message &msg, std::string
 	return true;
 }
 
-std::string MysqlCon::GetCreateTypeStr(FieldDescriptor::Type t, bool is_unique)
+std::string MysqlCon::GetCreateTypeStr(db::FieldType t, bool is_unique)
 {
 	string s;
 	switch (t)
 	{
 	default:
 		L_ERROR("unknow type %d", (int)t);
-		s="unknow type";
+		s = "unknow type";
 		break;
-	case FieldDescriptor::TYPE_DOUBLE:
-	case FieldDescriptor::TYPE_FLOAT:
+	case FieldType::t_double:
 		s = "double";
 		break;
-	case FieldDescriptor::TYPE_INT64:
-	case FieldDescriptor::TYPE_SINT64:
-	case FieldDescriptor::TYPE_SFIXED64:
-	case FieldDescriptor::TYPE_UINT64:
-	case FieldDescriptor::TYPE_FIXED64:
-	case FieldDescriptor::TYPE_FIXED32:
-	case FieldDescriptor::TYPE_UINT32:
+	case FieldType::t_int64_t:
+	case FieldType::t_uint64_t:
 		s = "bigint(20)";
 		break;
-	case FieldDescriptor::TYPE_INT32:
-	case FieldDescriptor::TYPE_ENUM:
-	case FieldDescriptor::TYPE_SFIXED32:
-	case FieldDescriptor::TYPE_SINT32:
-	case FieldDescriptor::TYPE_BOOL:
+	case FieldType::t_int32_t:
+	case FieldType::t_uint32_t:
 		s = "int(11)";
 		break;
-	case FieldDescriptor::TYPE_STRING:
+	case FieldType::t_bool:
+		s = "bool null";
+		break;
+	case FieldType::t_string:
 		s = "varchar(255) CHARACTER SET utf8 COLLATE utf8_general_ci";
 		break;
-	case FieldDescriptor::TYPE_MESSAGE:
-	case FieldDescriptor::TYPE_BYTES:
+	case FieldType::t_bytes:
 		s = "blob NULL";
 		break;
 	}
 	if (is_unique)
 	{
 		return s;
-	} 
+	}
 	else
 	{
 		return s + " NULL DEFAULT NULL";

@@ -8,7 +8,8 @@
 #include "mysql_connection.h"
 #include "cppconn/resultset.h"
 
-class MysqlCon : public IDbCon
+using QueryResultRowCb = std::function<void(db::BaseTable &data)>;
+class MysqlCon : public IDbCon, Singleton<MysqlCon>
 {
 private:
 	sql::Connection* m_con = nullptr;
@@ -18,22 +19,23 @@ public:
 
 	virtual bool ConnectDb(const Cfg &cfg) override;
 
-	virtual bool InitTable(const db::ReqInitTable &req, db::RspInitTable &rsp) override; //创建表， 检查表是否非法
-	virtual bool Insert(const db::ReqInsertData &req, ::uint64 &num_key, std::string &str_key) override;
-	virtual bool Update(const db::ReqUpdateData &req, ::uint64 &num_key, std::string &str_key) override;
-	virtual bool Get(const db::ReqGetData &req, InnerSvrCon &con) override;
-	virtual bool Del(const db::ReqDelData &req, db::RspDelData &rsp) override;
-	virtual bool ExecuteSql(const std::string &sql_str) override;
+	virtual bool InitTable() override; //创建表， 检查表是否非法
+	virtual bool Insert(const db::BaseTable &req)override;
+	virtual bool Update(const db::BaseTable &req)override;
+	virtual bool Query(const db::BaseTable &req, QueryResultRowCb cb)override;
+	virtual bool Del(const db::BaseTable &req)	  override;
+
+public:
+	bool TryCreateSchema(const std::string &name);
+
 
 private:
-	void SetInsertPreparePara(sql::PreparedStatement &pstmt, google::protobuf::Message &msg);
-	void SetUpdatePreparePara(sql::PreparedStatement &pstmt, google::protobuf::Message &msg);
-	bool SetField(google::protobuf::Message& msg, const google::protobuf::FieldDescriptor &field, const sql::ResultSet& res);
-	
-	bool TryCreateTableSql(const std::string &msg_name, std::string &sql_str);
-	bool CreateInsertSql(const google::protobuf::Message &msg, std::string &sql_str);
-	bool CreateUpdateSql(const google::protobuf::Message &msg, std::string &sql_str);
-	void CreateSelectSql(const db::ReqGetData &req, const std::string &table_name, std::string &sql_str);
-	std::string GetCreateTypeStr(google::protobuf::FieldDescriptor::Type t, bool is_unique);
+	void SetUpdatePreparePara(sql::PreparedStatement &pstmt, const db::BaseTable &data);
+	bool SetField(BaseTable &data, const Field &field, const sql::ResultSet& res);
 
+	bool TryCreateTableSql(const db::Table &table, std::string &sql_str);
+	bool CreateInsertSql(const db::BaseTable &data, std::string &sql_str);
+	bool CreateUpdateSql(const db::BaseTable &data, std::string &sql_str);
+	void CreateSelectSql(const db::BaseTable &data, const std::string &table_name, uint16_t limit_num, std::string &sql_str);
+	std::string GetCreateTypeStr(db::FieldType t, bool is_unique);
 };

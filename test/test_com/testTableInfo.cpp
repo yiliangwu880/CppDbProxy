@@ -23,12 +23,11 @@ using namespace proto;
 
 UNITTEST(testTableInfo)
 {
-	TableCfg::Ins().m_allTable;
-	UNIT_ASSERT(TableCfg::Ins().m_allTable.find(3) != TableCfg::Ins().m_allTable.end());
+	UNIT_ASSERT(TableCfg::Ins().GetTable(3) != nullptr);
 
 	//check Player2
 	{
-		const Table &table = TableCfg::Ins().m_allTable[2];
+		const Table &table = *(TableCfg::Ins().GetTable(2));
 		UNIT_ASSERT(table.m_vecField.size() == 3);
 		const Field f = table.m_vecField[0];
 		UNIT_ASSERT(f.name == "id2");
@@ -40,7 +39,7 @@ UNITTEST(testTableInfo)
 
 	//check Player3
 	{
-		const Table &table = TableCfg::Ins().m_allTable[3];
+		const Table &table = *(TableCfg::Ins().GetTable(3));
 		UNIT_ASSERT(table.m_vecField.size() == 6);
 		{
 			const Field f = table.m_vecField[0];

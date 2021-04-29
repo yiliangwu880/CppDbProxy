@@ -18,155 +18,32 @@ std::unique_ptr<BaseTable> CreateT()
 
 TableCfg::TableCfg()
 {
-	//init all db table decript
-	std::set<uint16_t> m_tableIds; //检查id唯一
-#if 0
-	{ //宏实现的代码模板
-		int idx = 0;
-		PlayerTest t;//用来推算类名字
-		Table &table = m_allTable[t.TableId()];
-		table.name = t.className;
-		table.tableId = t.TableId();
-		L_ASSERT(m_tableIds.insert(table.tableId).first);
-		L_ASSERT(0 == &(((decltype(t) *)(nullptr))->className));//检查className 必须定义第一行
-		L_ASSERT(string(t.className) == "PlayerTest"); //检查类名
-		size_t lastOffset = sizeof(BaseTable); //用来检查定义顺序是否和结构一致
-		table.factor = []() {
-			unique_ptr<BaseTable> p;
-			p.reset(new PlayerTest());
-			return p;
-		};
-		//field 1
-		{
-			Field &field = table.m_allField["id"];
-			field.name = "id";
-			field.type = FieldTypeTraits<decltype(t.id)>::type;
-			field.pOffset = (size_t)&(((decltype(t) *)(nullptr))->id);
-			field.fieldSize = sizeof(t.id);
-			if (typeid(t.id)==typeid(Bytes) || typeid(t.id) == typeid(std::string))
-			{
-				field.fieldSize = 0;
-			}
-			L_ASSERT(lastOffset <= field.pOffset); //field定义顺序和执行不一致
-			lastOffset = field.pOffset;
-
-			table.pKeyOffset = (uint8_t *)&(((decltype(t) *)(nullptr))->id);
-			field.keyType = KeyType::MAIN;
-			table.m_vecField.push_back(field);
-		}
-		//field 2
-		{
-		//...
-		}
-		//。。。。。
-		L_ASSERT(table.m_vecField.size() < std::numeric_limits<uint8_t>::max());
-	}
-#endif
-
-#define DB_CLASS_NAME(def_name)\
-	{\
-	int idx = 0;\
-	def_name t;\
-	Table &table = m_allTable[t.TableId()];\
-	table.name = t.className;\
-	table.tableId = t.TableId();\
-	L_ASSERT((m_tableIds.insert(table.tableId)).second);\
-	L_ASSERT(0 == &(((decltype(t) *)(nullptr))->className));\
-	L_ASSERT(string(t.className) == #def_name);\
-	size_t lastOffset = sizeof(BaseTable);\
-	table.factor = []() {\
-	unique_ptr<BaseTable> p;\
-	p.reset(new def_name());\
-	return p;\
-	};\
-
-
-#define DB_FIELD(fieldName)\
-	{\
-	Field &field = table.m_allField[#fieldName];\
-	field.name = #fieldName;\
-	field.type = FieldTypeTraits<decltype(t.fieldName)>::type;\
-	field.pOffset = (size_t)&(((decltype(t) *)(nullptr))->fieldName);\
-	field.fieldSize = sizeof(t.fieldName);\
-	if (typeid(t.fieldName) == typeid(Bytes) || typeid(t.fieldName) == typeid(std::string))\
-	{\
-		field.fieldSize = 0;\
-	}\
-	L_ASSERT(lastOffset <= field.pOffset);\
-	lastOffset = field.pOffset;\
-	table.m_vecField.push_back(field);\
-	}\
-
-
-#define DB_MAIN_KEY(fieldName)	 \
-	{\
-	Field &field = table.m_allField[#fieldName];\
-	field.name = #fieldName;\
-	field.type = FieldTypeTraits<decltype(t.fieldName)>::type;\
-	field.pOffset = (size_t)&(((decltype(t) *)(nullptr))->fieldName);\
-	field.fieldSize = sizeof(t.fieldName);\
-	if (typeid(t.fieldName) == typeid(Bytes) || typeid(t.fieldName) == typeid(std::string))\
-	{\
-		field.fieldSize = 0;\
-	}\
-	L_ASSERT(lastOffset <= field.pOffset);\
-	lastOffset = field.pOffset;\
-	table.pKeyOffset = (size_t)&(((decltype(t) *)(nullptr))->fieldName);\
-	field.keyType = KeyType::MAIN;\
-	table.m_vecField.push_back(field);\
-	}\
-
-
-#define DB_INDEX_KEY(fieldName)	 \
-	{\
-	Field &field = table.m_allField[#fieldName];\
-	field.name = #fieldName;\
-	field.type = FieldTypeTraits<decltype(t.fieldName)>::type;\
-	field.pOffset = (size_t)&(((decltype(t) *)(nullptr))->fieldName);\
-	field.fieldSize = sizeof(t.fieldName);\
-	if (typeid(t.fieldName) == typeid(Bytes) || typeid(t.fieldName) == typeid(std::string))\
-	{\
-		field.fieldSize = 0;\
-	}\
-	L_ASSERT(lastOffset <= field.pOffset);\
-	lastOffset = field.pOffset;\
-	field.keyType = KeyType::INDEX;\
-	table.m_vecField.push_back(field);\
-	}\
-
-
-#define DB_CLASS_END	\
-	L_ASSERT(table.m_vecField.size() < std::numeric_limits<uint8_t>::max());\
-}\
-
-		DB_ALL_TABLE_INFO
-#undef  DB_CLASS_NAME
-#undef  DB_FIELD
-#undef  DB_CLASS_END
+	InitTableCfg();
+	CheckMissField();
 }
 
-bool db::TableCfg::GetFieldPoint(const BaseTable &obj, const std::string &fieldName, FieldInfo &fieldInfo)
-{
-	auto it = m_allTable.find(obj.TableId());
-	if (it == m_allTable.end())
-	{
-		L_ERROR("obj is not db table");
-		return false;
-	}
-	Table &table = it->second;
-
-	auto it_field = table.m_allField.find(fieldName);
-	if (it_field == table.m_allField.end())
-	{
-		L_ERROR("fieldName is error %s", fieldName.c_str());
-		return false;
-	}
-	Field &field = it_field->second;
-
-	fieldInfo.fieldPoint = (void *)(((uint8_t *)(&obj) + (int64_t)field.pOffset));
-	fieldInfo.type = field.type;
-	return true;
-}
+//bool db::TableCfg::GetFieldPoint(const BaseTable &obj, const std::string &fieldName, FieldInfo &fieldInfo)
+//{
+//	auto it = m_allTable.find(obj.TableId());
+//	if (it == m_allTable.end())
+//	{
+//		L_ERROR("obj is not db table");
+//		return false;
+//	}
+//	Table &table = it->second;
+//
+//	auto it_field = table.m_allField.find(fieldName);
+//	if (it_field == table.m_allField.end())
+//	{
+//		L_ERROR("fieldName is error %s", fieldName.c_str());
+//		return false;
+//	}
+//	Field &field = it_field->second;
+//
+//	fieldInfo.fieldPoint = (void *)(((uint8_t *)(&obj) + (int64_t)field.pOffset));
+//	fieldInfo.type = field.type;
+//	return true;
+//}
 
 bool db::TableCfg::Pack(const BaseTable &obj, char *str, size_t &len)
 {
@@ -176,7 +53,9 @@ bool db::TableCfg::Pack(const BaseTable &obj, char *str, size_t &len)
 	//uint8_t fieldIdx[field_num]	--有效域索引 数组
 	//value1, value2, ...  --有效域 的值,不同类型长度不一样。 
 	//value 如果是string结构, 内存格式： {uint32_t len, char *str}
+	//uint8_t endFlag; --标识结尾 tableid+field_num ，截取一个字节。 目的：更严格的检查，降低随机错误检查不出来的概率
 
+	//本来考虑模板，但模板做不到那么简洁 “SetValue(v)”
 #define  SetValue(v)\
 	L_COND(remainLen > sizeof(v), false);\
 	*(decltype(v)*)cur = v;\
@@ -254,6 +133,8 @@ bool db::TableCfg::Pack(const BaseTable &obj, char *str, size_t &len)
 			remainLen -= field.fieldSize;
 		}
 	}
+	uint8_t endFlag = field_num + (uint8_t)obj.TableId();
+	SetValue(endFlag);
 	len = len - remainLen;
 	return true;
 #undef SetValue
@@ -262,7 +143,7 @@ bool db::TableCfg::Pack(const BaseTable &obj, char *str, size_t &len)
 std::unique_ptr<db::BaseTable> db::TableCfg::Unpack(const char *cur, size_t len)
 {
 #define  SetValue(v)\
-	L_COND(remainLen > sizeof(v), nullptr);\
+	L_COND(remainLen >= sizeof(v), nullptr);\
 	v = *(const decltype(v)*)cur;\
 	cur += sizeof(v);\
 	remainLen -= sizeof(v);\
@@ -321,8 +202,226 @@ std::unique_ptr<db::BaseTable> db::TableCfg::Unpack(const char *cur, size_t len)
 			remainLen -= field.fieldSize;
 		}
 	}
-
+	uint8_t endFlag;
+	SetValue(endFlag);
+	if (endFlag != (field_num + (uint8_t)tableId))
+	{
+		return nullptr;
+	}
 	return p;
 #undef SetValue
 }
 
+const db::Table * db::TableCfg::GetTable(uint16_t tableId) const
+{
+	auto it = m_allTable.find(tableId);
+	if (it == m_allTable.end())
+	{
+		return nullptr;
+	}
+	return &(it->second);
+}
+
+void db::TableCfg::InitTableCfg()
+{
+	//init all db table decript
+	std::set<uint16_t> m_tableIds; //检查id唯一
+#if 0
+	{ //宏实现的代码模板
+		int idx = 0;
+		PlayerTest t;//用来推算类名字
+		Table &table = m_allTable[t.TableId()];
+		table.name = t.className;
+		table.tableId = t.TableId();
+		L_ASSERT(m_tableIds.insert(table.tableId).first);
+		L_ASSERT(0 == &(((decltype(t) *)(nullptr))->className));//检查className 必须定义第一行
+		L_ASSERT(string(t.className) == "PlayerTest"); //检查类名
+		size_t lastOffset = sizeof(BaseTable); //用来检查定义顺序是否和结构一致
+		table.factor = []() {
+			unique_ptr<BaseTable> p;
+			p.reset(new PlayerTest());
+			return p;
+		};
+		//field 1
+		{
+			Field &field = table.m_allField["id"];
+			field.name = "id";
+			field.type = FieldTypeTraits<decltype(t.id)>::type;
+			field.pOffset = (size_t)&(((decltype(t) *)(nullptr))->id);
+			field.fieldSize = sizeof(t.id);
+			field.idx = table.m_vecField.size();
+			if (typeid(t.id) == typeid(Bytes) || typeid(t.id) == typeid(std::string))
+			{
+				field.fieldSize = 0;
+			}
+			L_ASSERT(lastOffset <= field.pOffset); //field定义顺序和执行不一致
+			lastOffset = field.pOffset;
+
+			table.pKeyOffset = (uint8_t *)&(((decltype(t) *)(nullptr))->id);
+			field.keyType = KeyType::MAIN;
+			table.m_vecField.push_back(field);
+		}
+		//field 2
+		{
+			//...
+		}
+		//。。。。。
+		L_ASSERT(table.m_vecField.size() < std::numeric_limits<uint8_t>::max());
+	}
+#endif
+
+#define DB_CLASS_NAME(def_name)\
+	{\
+	int idx = 0;\
+	def_name t;\
+	Table &table = m_allTable[t.TableId()];\
+	table.name = t.className;\
+	table.tableId = t.TableId();\
+	L_ASSERT((m_tableIds.insert(table.tableId)).second);\
+	L_ASSERT(0 == &(((decltype(t) *)(nullptr))->className));\
+	L_ASSERT(string(t.className) == #def_name);\
+	size_t lastOffset = sizeof(BaseTable);\
+	table.factor = []() {\
+	unique_ptr<BaseTable> p;\
+	p.reset(new def_name());\
+	return p;\
+	};\
+
+
+#define DB_FIELD(fieldName)\
+	{\
+	Field &field = table.m_allField[#fieldName];\
+	field.name = #fieldName;\
+	field.type = FieldTypeTraits<decltype(t.fieldName)>::type;\
+	field.pOffset = (size_t)&(((decltype(t) *)(nullptr))->fieldName);\
+	field.fieldSize = sizeof(t.fieldName);\
+	field.idx = table.m_vecField.size();\
+	if (typeid(t.fieldName) == typeid(Bytes) || typeid(t.fieldName) == typeid(std::string))\
+	{\
+		field.fieldSize = 0;\
+	}\
+	L_ASSERT(lastOffset <= field.pOffset);\
+	lastOffset = field.pOffset;\
+	table.m_vecField.push_back(field);\
+	}\
+
+
+#define DB_MAIN_KEY(fieldName)	 \
+	{\
+	Field &field = table.m_allField[#fieldName];\
+	field.name = #fieldName;\
+	field.type = FieldTypeTraits<decltype(t.fieldName)>::type;\
+	field.pOffset = (size_t)&(((decltype(t) *)(nullptr))->fieldName);\
+	field.fieldSize = sizeof(t.fieldName);\
+	field.idx = table.m_vecField.size();\
+	if (typeid(t.fieldName) == typeid(Bytes) || typeid(t.fieldName) == typeid(std::string))\
+	{\
+		field.fieldSize = 0;\
+	}\
+	L_ASSERT(lastOffset <= field.pOffset);\
+	lastOffset = field.pOffset;\
+	table.pKeyOffset = (size_t)&(((decltype(t) *)(nullptr))->fieldName);\
+	field.keyType = KeyType::MAIN;\
+	table.m_vecField.push_back(field);\
+	}\
+
+
+#define DB_INDEX_KEY(fieldName)	 \
+	{\
+	Field &field = table.m_allField[#fieldName];\
+	field.name = #fieldName;\
+	field.type = FieldTypeTraits<decltype(t.fieldName)>::type;\
+	field.pOffset = (size_t)&(((decltype(t) *)(nullptr))->fieldName);\
+	field.fieldSize = sizeof(t.fieldName);\
+	field.idx = table.m_vecField.size();\
+	if (typeid(t.fieldName) == typeid(Bytes) || typeid(t.fieldName) == typeid(std::string))\
+	{\
+		field.fieldSize = 0;\
+	}\
+	L_ASSERT(lastOffset <= field.pOffset);\
+	lastOffset = field.pOffset;\
+	field.keyType = KeyType::INDEX;\
+	table.m_vecField.push_back(field);\
+	}\
+
+
+#define DB_CLASS_END	\
+	L_ASSERT(table.m_vecField.size() < std::numeric_limits<uint8_t>::max());\
+}\
+
+	DB_ALL_TABLE_INFO
+
+#undef  DB_CLASS_NAME
+#undef  DB_MAIN_KEY
+#undef  DB_INDEX_KEY
+#undef  DB_FIELD
+#undef  DB_CLASS_END
+}
+
+void db::TableCfg::CheckMissField()
+{
+#if 0
+	struct CheckPlayer23 : public BaseTable
+	{
+		using CheckType = Player2;
+		CheckPlayer23() : BaseTable("CheckPlayer2", 2) {}
+		decltype(CheckType::id2) id2;
+	};
+	L_ASSERT(sizeof(CheckPlayer23) == sizeof(Player2));
+#endif
+	//
+
+#define DB_CLASS_NAME(className) \
+	struct Check##className : public BaseTable\
+	{\
+		using CheckType = className;\
+		Check##className() : BaseTable("none", 0) {}\
+
+#define DB_MAIN_KEY(fieldName)\
+		decltype(CheckType::fieldName) fieldName;\
+
+#define DB_INDEX_KEY(fieldName)\
+		decltype(CheckType::fieldName) fieldName;\
+
+#define DB_FIELD(fieldName)	\
+		decltype(CheckType::fieldName) fieldName;\
+
+#define DB_CLASS_END\
+	};\
+
+	DB_ALL_TABLE_INFO
+
+#undef  DB_CLASS_NAME
+#undef  DB_MAIN_KEY
+#undef  DB_INDEX_KEY
+#undef  DB_FIELD
+#undef  DB_CLASS_END
+
+#define DB_CLASS_NAME(className) \
+	L_ASSERT(sizeof(Check##className) == sizeof(className));\
+
+#define DB_MAIN_KEY(fieldName)
+#define DB_INDEX_KEY(fieldName)
+#define DB_FIELD(fieldName)	
+#define DB_CLASS_END
+
+		DB_ALL_TABLE_INFO
+
+#undef  DB_CLASS_NAME
+#undef  DB_MAIN_KEY
+#undef  DB_INDEX_KEY
+#undef  DB_FIELD
+#undef  DB_CLASS_END
+}
+
+const db::Field * db::Table::GetMainKey() const
+{
+	for (const Field &field : m_vecField)
+	{
+		if (KeyType::MAIN == field.keyType)
+		{
+			return &field;
+		}
+	}
+	return nullptr;
+}

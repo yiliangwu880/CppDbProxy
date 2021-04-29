@@ -12,7 +12,6 @@
 #include "unit_test.h"
 #include "../db_driver/include/db_driver.h"
 #include "../com/cfg.h"
-#include "proto/test_data.pb.h"
 
 using namespace std;
 using namespace su;

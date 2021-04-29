@@ -9,155 +9,77 @@ using namespace su;
 using namespace db;
 using namespace proto;
 
-/*
-db::DbDriverMgr::DbDriverMgr()
-	:m_con(*(new DbClientCon()))
-{
-
-}
-
-DbDriverMgr::~DbDriverMgr()
-{
-	delete &m_con;
-}
-
-BaseDbproxy::BaseDbproxy()
-{
-	
-}
-
-bool db::BaseDbproxy::Connect(const std::string &ip, uint16 port)
-{
-	event_base *p = EventMgr::Obj().GetEventBase();
-	L_COND_F(p, "must call EventMgr::Obj().Init before this function");
-	return m_con.ConnectInit(ip.c_str(), port);
-}
-
-bool db::BaseDbproxy::InitTable(const db::ReqInitTable &req)
-{
-	return m_con.Send(CMD_INIT_TABLE, req);
-}
-
-
-
-bool db::BaseDbproxy::Update(const google::protobuf::Message &msg)
-{
-	ReqUpdateData req;
-	req.set_msg_name(msg.GetTypeName());
-	req.set_data(msg.SerializeAsString());
-	return m_con.Send(CMD_UPDATE, req);
-}
-
-bool db::BaseDbproxy::Get(const std::string &msg_name, const std::string &cond, uint32 limit_num)
-{
-	ReqGetData req;
-	req.set_msg_name(msg_name);
-	req.set_cond(cond);
-	req.set_limit_num(limit_num);
-	return m_con.Send(CMD_GET, req);
-}
-
-bool db::BaseDbproxy::Del(const std::string &msg_name, ::uint64 num_key, const std::string &str_key)
-{
-	ReqDelData req;
-	req.set_msg_name(msg_name);
-	req.set_num_key(num_key);
-	req.set_str_key(str_key);
-	return m_con.Send(CMD_DEL, req);
-}
-
-bool db::BaseDbproxy::ExecuteSql(const std::string &sql_str)
-{
-	ReqSql req;
-	req.set_exe_str(sql_str);
-	return m_con.Send(CMD_SQL, req);
-}
-*/
-
-//bool db::DbDriverMgr::Connect(const std::string &ip, uint16 port)
-//{
-//
-//}
 namespace
 {
-	uint32_t CreateId()
+	//把 BaseTable对象 和 协议结构  构建在 MsgPack。ProtoType 其他字段内容未赋值。
+	//类似下面的结构：data[0]最后定义，存放db 对象
+	//	struct query_sc
+	//{
+	//	const uint16_t id = 6;
+	//	bool ret;
+	//	char data[0]; //一个db 对象
+	//};
+	template<class ProtoType>
+	ProtoType *BuildMsgPack(MsgPack &msg, db::BaseTable &data)
 	{
-		static uint32_t id_seed = 0;
-		id_seed++;
-		if (id_seed == 0)
-		{
-			id_seed++;
-		}
-		return id_seed;
-	}
+		ProtoType *p = new (msg.data)ProtoType;
+		//data可用长度
+		size_t len = ArrayLen(msg.data) - sizeof(*p);
+		if (!TableCfg::Ins().Pack(data, p->data, len))		{
+			L_ERROR("pack fail");			return nullptr;		}		msg.len = sizeof(ProtoType) + len;	}
 }
+
+
 db::BaseDbproxy::BaseDbproxy()
-	:m_con(*( new DbClientCon()))
 {
+	RegProtoParse<insert_sc>(&BaseDbproxy::ParseInsert);
+	RegProtoParse<query_sc>(&BaseDbproxy::ParseQuery);
 }
 
 
 void db::BaseDbproxy::Init(const std::string &ip, uint16_t port, ConCb cb)
 {
-	m_con.ConnectInit(ip.c_str(), port);
+	DbClientCon::Ins().ConnectInit(ip.c_str(), port);
 	m_conCb = cb;
 }
 
-bool db::BaseDbproxy::Insert(const db::BaseTable &dbObj)
+bool db::BaseDbproxy::Insert(const db::BaseTable &data)
 {
-	using ProtoType = insert_cs;
 	MsgPack msg;
-	ProtoType *p = new (msg.data)ProtoType;
-
-	//dbObj可用长度
-	size_t len = ArrayLen(msg.data) - sizeof(ProtoType);
-	if (!TableCfg::Ins().Pack(dbObj, p->dbObj, len))
-	{
-		L_ERROR("pack fail");
-		return false;
-	}
-	msg.len = sizeof(ProtoType) + len;
-	return m_con.SendData(msg);
+	insert_cs *p = BuildMsgPack<insert_cs>(msg, data);
+	L_COND(p, false);
+	return DbClientCon::Ins().SendData(msg);
 }
 
-bool db::BaseDbproxy::Query(const db::BaseTable &dbObj, uint32 limit_num/*=1*/)
+bool db::BaseDbproxy::Query(const db::BaseTable &data, uint32 limit_num/*=1*/)
 {
-	using ProtoType = query_cs;
 	MsgPack msg;
-	ProtoType *p = new (msg.data)ProtoType;
-	p->limit_num = limit_num;
-
-	//dbObj可用长度
-	size_t len = ArrayLen(msg.data) - sizeof(ProtoType);
-	if (!TableCfg::Ins().Pack(dbObj, p->dbObj, len))
-	{
-		L_ERROR("pack fail");
-		return false;
-	}
-	msg.len = sizeof(ProtoType) + len;
-	return m_con.SendData(msg);
+	query_cs *p = BuildMsgPack<query_cs>(msg, data);
+	L_COND(p, false);
+	return DbClientCon::Ins().SendData(msg);
 }
 
-void db::BaseDbproxy::ParseInsert(const proto::insert_sc *msg)
+void db::BaseDbproxy::OnRecv(const lc::MsgPack &msg)
 {
-	//unpack insert_sc.dbObj
-// BaseTable &t; get table obj
-//t.tableId to concrete fun
-	//BaseTable *pT;
-
-	//using ComFun = void(bool isOk, const void *dbObj); //查询回调， 抽象类型。 
-	//uint16_t cmdId = *(const uint16_t *)msg_pack.data;
-	//ComFun *fun = (ComFun *)(m_Id2QueryCb[cmdId]);
-	//(*fun)(this, msg_pack.data);
-
+	using ComFun = void(const void *, decltype(msg.len)); //消息回调函数， 抽象类型。 
+	uint16_t cmdId = *(const uint16_t *)msg.data; //约定协议前 uint16_t 为 cmdId. 比如 
+	ComFun *fun = (ComFun *)(m_cmdId2Cb[cmdId]);
+	(*fun)(msg.data, msg.len);
 }
 
-void db::BaseDbproxy::ParseQuery(const proto::query_sc *msg)
+void db::BaseDbproxy::ParseInsert(const proto::insert_sc *msg, uint32_t len)
 {
+	L_COND_V(len >= sizeof(msg));
+	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(msg->data, len - sizeof(msg));
+	L_COND_V(nullptr != pTable);
 
+	using ComFun = void(bool, const BaseTable& ); //查询回调， 抽象类型。 
+	ComFun *fun = (ComFun *)(BaseDbproxy::Ins().m_id2InertCb[pTable->TableId()]);
+	BaseTable &table = *(pTable.get());
+	(*fun)(msg->ret, table);
 }
 
-uint16_t db::DbClientCon::Send(proto::insert_cs &msg)
+void db::BaseDbproxy::ParseQuery(const proto::query_sc *msg, uint32_t len)
 {
-	return 0;
+
 }

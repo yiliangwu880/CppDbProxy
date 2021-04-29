@@ -9,30 +9,17 @@ using namespace std;
 using namespace google::protobuf;
 using namespace db;
 
-DbConMgr::~DbConMgr()
-{
-	if (nullptr != m_con)
-	{
-		delete m_con;
-		m_con = nullptr;
-	}
-}
-
 bool DbConMgr::Init(const Cfg &cfg)
 {
 	//mysql_db Лђеп mongodb_db
 	if (cfg.select_db == "mysql_db")
 	{
-		MysqlCon *con = new MysqlCon;
-		m_con = con;
-		return con->ConnectDb(cfg);
+		m_con = &MysqlCon::Ins();
 	}
 	else if (cfg.select_db == "mongodb_db")
 	{
 		return false;
-		MongodbConn *con = new MongodbConn;
-		m_con = con;
-		return con->ConnectDb(cfg);
+		m_con = &MongodbConn::Ins();
 	}
 	else
 	{
@@ -40,7 +27,7 @@ bool DbConMgr::Init(const Cfg &cfg)
 		return false;
 	}
 
-	return true;
+	return m_con->ConnectDb(cfg);
 }
 
 IDbCon & DbConMgr::GetCon()

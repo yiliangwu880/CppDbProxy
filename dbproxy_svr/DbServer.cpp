@@ -1,122 +1,73 @@
 #include "DbServer.h"
 #include "svr_util/include/read_cfg.h"
-#include "google/protobuf/message.h"
-#include "base.pb.h"
 #include "db_con.h"
 #include "parser.h"
 
 using namespace std;
 using namespace lc;
-using namespace google::protobuf;
 using namespace db;
-
-using UINT64 =::uint64;
+using namespace proto;
 
 namespace
 {
-	//简化解包操作。赋值并移动指针
-	template<class T>
-	void ParseCp(T &dst, const char *&src)
+	//把 BaseTable对象 和 协议结构  构建在 MsgPack。ProtoType 其他字段内容未赋值。
+	//类似下面的结构：data[0]最后定义，存放db 对象
+	//	struct query_sc
+	//{
+	//	const uint16_t id = 6;
+	//	bool ret;
+	//	char data[0]; //一个db 对象
+	//};
+	template<class ProtoType>
+	ProtoType *BuildMsgPack(MsgPack &msg, db::BaseTable &data)
 	{
-		dst = *(T *)(src); // 类似 dst = *(uint32 *)(src)
-		src = src + sizeof(dst);
-	}
+		ProtoType *p = new (msg.data)ProtoType;
+		//data可用长度
+		size_t len = ArrayLen(msg.data) - sizeof(*p);
+		if (!TableCfg::Ins().Pack(data, p->data, len))		{
+			L_ERROR("pack fail");			return nullptr;		}		msg.len = sizeof(ProtoType) + len;	}
 }
 
-void InnerSvrCon::Handle_CMD_INIT_TABLE(const char *msg, uint16 msg_len)
+
+InnerSvrCon::InnerSvrCon()
 {
-	IDbCon &db_con = DbConMgr::Obj().GetCon();
-	ReqInitTable req;
-	L_COND(req.ParseFromArray(msg, msg_len), "msg parse fail");
-	RspInitTable rsp;
-	db_con.InitTable(req, rsp);
-	Send(rsp);
+	RegProtoParse<insert_cs>(&BaseDbproxy::ParseInsert);
+	RegProtoParse<query_cs>(&BaseDbproxy::ParseQuery);
+	RegProtoParse<update_cs>(&BaseDbproxy::ParseUpdate);
+	RegProtoParse<del_cs>(&BaseDbproxy::ParseDel);
 }
 
-void InnerSvrCon::Handle_CMD_INSERT(const char *msg, uint16 msg_len)
+void InnerSvrCon::OnRecv(const MsgPack &msg)
 {
-	IDbCon &db_con = DbConMgr::Obj().GetCon();
-	ReqInsertData req;
-	L_COND(req.ParseFromArray(msg, msg_len), "msg parse fail");
-	UINT64 num_key;
-	string str_key;
-	bool r = db_con.Insert(req, num_key, str_key);
-	RspInsertData rsp;
-	rsp.set_msg_name(req.msg_name());
-	rsp.set_num_key(num_key);
-	rsp.set_str_key(str_key);
-	rsp.set_is_ok(r);
-	Send(rsp);
+	using ComFun = void(InnerSvrCon &con, const void *protoMsg, decltype(msg.len)); //消息回调函数， 抽象类型。 
+	uint16_t cmdId = *(const uint16_t *)msg.data; //约定协议前 uint16_t 为 cmdId.  
+	ComFun *fun = (ComFun *)(m_cmdId2Cb[cmdId]);
+	(*fun)(*this, msg.data, msg.len);
 }
 
-void InnerSvrCon::Handle_CMD_UPDATE(const char *msg, uint16 msg_len)
+void InnerSvrCon::ParseQuery(InnerSvrCon &con, const proto::query_cs *req, uint32_t req_len)
 {
-	IDbCon &db_con = DbConMgr::Obj().GetCon();
-	ReqUpdateData req;
-	L_COND(req.ParseFromArray(msg, msg_len), "msg parse fail");
-	UINT64 num_key;
-	string str_key;
-	bool r = db_con.Update(req, num_key, str_key);
-	RspUpdateData rsp;
-	rsp.set_msg_name(req.msg_name());
-	rsp.set_num_key(num_key);
-	rsp.set_str_key(str_key);
-	rsp.set_is_ok(r);
-	Send(rsp);
-}
+	L_COND_V(req_len >= sizeof(req));
+	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(req->data, req_len - sizeof(req));
+	L_COND_V(nullptr != pTable);
+	BaseTable &data = *pTable;
+	IDbCon &dbCon = DbConMgr::Ins().GetCon();
 
-void InnerSvrCon::Handle_CMD_GET(const char *msg, uint16 msg_len)
-{
-	IDbCon &db_con = DbConMgr::Obj().GetCon();
-	ReqGetData req;
-	L_COND(req.ParseFromArray(msg, msg_len), "msg parse fail");
-	db_con.Get(req, *this);
-}
-
-void InnerSvrCon::Handle_CMD_DEL(const char *msg, uint16 msg_len)
-{
-	IDbCon &db_con = DbConMgr::Obj().GetCon();
-	ReqDelData req;
-	L_COND(req.ParseFromArray(msg, msg_len), "msg parse fail");
-
-	RspDelData rsp;
-	db_con.Del(req, rsp);
-	Send(rsp);
-}
-
-void InnerSvrCon::Handle_CMD_SQL(const char *msg, uint16 msg_len)
-{
-	IDbCon &db_con = DbConMgr::Obj().GetCon();
-	ReqSql req;
-	L_COND(req.ParseFromArray(msg, msg_len), "msg parse fail");
-
-	RspSql rsp;
-	rsp.set_is_ok(db_con.ExecuteSql(req.exe_str()));
-	Send(rsp);
-}
-
-void InnerSvrCon::OnRecv(const MsgPack &msg_pack)
-{
-	if (msg_pack.len < sizeof(db::Cmd))
+	QueryResultRowCb cb = [](db::BaseTable &data)
 	{
-		L_WARN("illegal msg. msg.len=%d", msg_pack.len);
-		return;
-	}
-	const char *cur = msg_pack.data;
-	ParseCp(m_cur_cmd, cur);
-	const char *msg = cur; 
-	uint16 msg_len = msg_pack.len - sizeof(db::Cmd);
-	switch (m_cur_cmd)
-	{
-	case CMD_INIT_TABLE: Handle_CMD_INIT_TABLE(msg, msg_len); return;
-	case CMD_INSERT    : Handle_CMD_INSERT(msg, msg_len); return;
-	case CMD_UPDATE    : Handle_CMD_UPDATE(msg, msg_len); return;
-	case CMD_GET       : Handle_CMD_GET(msg, msg_len); return;
-	case CMD_DEL       : Handle_CMD_DEL(msg, msg_len); return;
-	case CMD_SQL       : Handle_CMD_SQL(msg, msg_len); return;
-	default:
-		L_WARN("illegal msg. cmd=%d", m_cur_cmd); return;
-		break;
+		MsgPack msg;
+		query_sc *rsp = BuildMsgPack<query_sc>(msg, data);
+		L_COND_V(rsp);
+		rsp->ret = true;
+		return SendData(msg);
+	};
+	if (!dbCon.Query(data, cb))
+	{//response
+		MsgPack msg;
+		query_sc *rsp = BuildMsgPack<query_sc>(msg, data);
+		L_COND_V(rsp);
+		rsp->ret = false;
+		return SendData(msg);
 	}
 }
 
@@ -125,20 +76,4 @@ void InnerSvrCon::OnConnected()
 	L_DEBUG("svr connect");
 }
 
-void InnerSvrCon::Send(const google::protobuf::Message &msg)
-{
-	Send(m_cur_cmd, msg);
-}
 
-void InnerSvrCon::Send(db::Cmd cmd, const google::protobuf::Message &msg)
-{
-	string s;
-	bool r = msg.SerializeToString(&s);
-	L_COND(r, " msg.SerializeToString fail. cmd=%s", db::Cmd_Name(cmd).c_str());
-
-
-	string msg_pack;
-	msg_pack.append((const char *)&cmd, sizeof(cmd));
-	msg_pack.append(s);
-	SendPack(msg_pack);
-}

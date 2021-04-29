@@ -36,12 +36,12 @@ void ProtoUtil::Test()
 
 bool ProtoUtil::GetFieldOpt(const google::protobuf::Descriptor &des, const std::string &field_name, const std::string &opt_name, string &v)
 {
-	const FieldDescriptor* fd = des.FindFieldByName(field_name);
+	const FieldType* fd = des.FindFieldByName(field_name);
 	COND_F(fd);
 	const FieldOptions& fo = fd->options();
 	const Reflection* ref = fo.GetReflection();
 	COND_F(ref);
-	const FieldDescriptor* opt_fd = ref->FindKnownExtensionByName(opt_name);
+	const FieldType* opt_fd = ref->FindKnownExtensionByName(opt_name);
 	COND_F(opt_fd);
 
 	v = ref->GetString(fo, opt_fd);
@@ -50,12 +50,12 @@ bool ProtoUtil::GetFieldOpt(const google::protobuf::Descriptor &des, const std::
 
 bool ProtoUtil::GetFieldOpt(const google::protobuf::Descriptor &des, const std::string &field_name, const std::string &opt_name, int32 &v)
 {
-	const FieldDescriptor* fd = des.FindFieldByName(field_name);
+	const FieldType* fd = des.FindFieldByName(field_name);
 	COND_F(fd);
 	const FieldOptions& fo = fd->options();
 	const Reflection* ref = fo.GetReflection();
 	COND_F(ref);
-	const FieldDescriptor* opt_fd = ref->FindKnownExtensionByName(opt_name);
+	const FieldType* opt_fd = ref->FindKnownExtensionByName(opt_name);
 	COND_F(opt_fd);
 
 	v = ref->GetInt32(fo, opt_fd);
@@ -64,12 +64,12 @@ bool ProtoUtil::GetFieldOpt(const google::protobuf::Descriptor &des, const std::
 
 bool ProtoUtil::GetFieldOptEnum(const Descriptor &des, const std::string &field_name, const std::string &opt_name, uint32 &v)
 {
-	const FieldDescriptor* fd = des.FindFieldByName(field_name);
+	const FieldType* fd = des.FindFieldByName(field_name);
 	COND_F(fd);
 	const FieldOptions& fo = fd->options();
 	const Reflection* ref = fo.GetReflection();
 	COND_F(ref);
-	const FieldDescriptor* opt_fd = ref->FindKnownExtensionByName(opt_name);
+	const FieldType* opt_fd = ref->FindKnownExtensionByName(opt_name);
 	COND_F(opt_fd);
 
 	v = ref->GetEnumValue(fo, opt_fd);
@@ -89,7 +89,7 @@ bool ProtoUtil::GetMsgOpt(const google::protobuf::Descriptor &des, const std::st
 	const MessageOptions& opt = des.options();
 	const Reflection* ref = opt.GetReflection();
 	COND_F(ref);
-	const FieldDescriptor* opt_fd = ref->FindKnownExtensionByName(opt_name);
+	const FieldType* opt_fd = ref->FindKnownExtensionByName(opt_name);
 	COND_F(opt_fd);
 
 	v = ref->GetString(opt, opt_fd);
@@ -106,7 +106,7 @@ bool ProtoUtil::GetMsgMainKeyVal(const google::protobuf::Message &msg, ::uint64 
 	L_COND_F(cnt > 0, "no field");
 	for (int i = 0; i < cnt; i++)
 	{
-		const FieldDescriptor* field = des->field(i);
+		const FieldType* field = des->field(i);
 		L_COND_F(field);
 		KeyType key_type;
 		GetFieldKeyOpt(*des, field->name(), key_type);
@@ -118,7 +118,7 @@ bool ProtoUtil::GetMsgMainKeyVal(const google::protobuf::Message &msg, ::uint64 
 		//is main key
 		const Reflection* ref = msg.GetReflection();
 		L_COND_F(ref);
-		if (FieldDescriptor::TYPE_STRING == field->type())
+		if (FieldType::TYPE_STRING == field->type())
 		{
 			str_key = ref->GetString(msg, field);
 			return true;
@@ -138,7 +138,7 @@ std::string ProtoUtil::GetMsgMainKeyName(const google::protobuf::Descriptor &des
 	L_COND_F(cnt > 0, "no field");
 	for (int i = 0; i < cnt; i++)
 	{
-		const FieldDescriptor* field = des.field(i);
+		const FieldType* field = des.field(i);
 		L_COND_F(field);
 		KeyType key_type;
 		GetFieldKeyOpt(des, field->name(), key_type);
