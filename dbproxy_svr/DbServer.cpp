@@ -10,22 +10,27 @@ using namespace proto;
 
 namespace
 {
-	//把 BaseTable对象 和 协议结构  构建在 MsgPack。ProtoType 其他字段内容未赋值。
-	//类似下面的结构：data[0]最后定义，存放db 对象
+	//把 BaseTable对象 和 协议结构ProtoType  构建在 MsgPack,并设置MsgPack::len。ProtoType 其他字段内容未赋值。
+	//类似下面的结构：dataLen data[0]必须最后定义，存放db 对象
 	//	struct query_sc
 	//{
 	//	const uint16_t id = 6;
-	//	bool ret;
+	//	bool ret;  //其他内容
+	//  uint32_t dataLen;
 	//	char data[0]; //一个db 对象
 	//};
 	template<class ProtoType>
 	ProtoType *BuildMsgPack(MsgPack &msg, const db::BaseTable &data)
 	{
+		//要求dataLen data[0]必须最后定义
+		static_assert((size_t)&(((ProtoType *)(nullptr))->dataLen) == sizeof(ProtoType) - sizeof(uint32_t));
+		static_assert((size_t)&(((ProtoType *)(nullptr))->data) == sizeof(ProtoType));
+
 		ProtoType *p = new (msg.data)ProtoType;
 		//data可用长度
 		size_t len = ArrayLen(msg.data) - sizeof(*p);
 		if (!TableCfg::Ins().Pack(data, p->data, len))		{
-			L_ERROR("pack fail");			return nullptr;		}		msg.len = sizeof(ProtoType) + len;		return p;	}
+			L_ERROR("pack fail");			return nullptr;		}		p->dataLen = len;		msg.len = sizeof(ProtoType) + len;		return p;	}
 }
 
 

@@ -11,7 +11,7 @@ static const uint32 RE_CON_INTERVAL_SEC = 10; //x√Î≥¢ ‘÷ÿ¡¨
 
 void DbClientCon::OnRecv(const lc::MsgPack &msg_pack)
 {
-	BaseDbproxy::Ins().OnRecv(msg_pack);
+	Dbproxy::Ins().OnRecv(msg_pack);
 
 }
 
@@ -22,9 +22,9 @@ void db::DbClientCon::OnTryReconTimeOut()
 
 void DbClientCon::OnConnected()
 {
-	if (BaseDbproxy::Ins().m_conCb)
+	if (Dbproxy::Ins().m_conCb)
 	{
-		BaseDbproxy::Ins().m_conCb();
+		Dbproxy::Ins().m_conCb();
 	}
 }
 

@@ -19,7 +19,6 @@ main()
 #include <vector>
 #include <unordered_map>
 #include <map>
-#include "libevent_cpp/include/include_all.h"
 #include "svr_util/include/singleton.h"
 #include "svr_util/include/easy_code.h"
 #include "svr_util/include/typedef.h"
@@ -27,6 +26,10 @@ main()
 #include "proto/proto.h"
 #include "../src/log_def.h"
 
+namespace lc
+{
+	class MsgPack;
+}
 namespace db {
 
 	class DbClientCon;
@@ -34,7 +37,7 @@ namespace db {
 	using ConCb = std::function<void()>;
 
 	//db driver 接口
-	class BaseDbproxy: public Singleton<BaseDbproxy>
+	class Dbproxy: public Singleton<Dbproxy>
 	{
 		friend DbClientCon;
 
@@ -43,9 +46,10 @@ namespace db {
 		std::unordered_map<uint16_t, void *> m_cmdId2Cb; //proto 消息ID 2 回调
 		std::unordered_map<uint16_t, void *> m_id2QueryCb; //tableID 2 查询回调
 		std::unordered_map<uint16_t, void *> m_id2InertCb;
+		std::unordered_map<uint16_t, void *> m_id2DelCb;
 
 	public:
-		BaseDbproxy();
+		Dbproxy();
 		void Init(const std::string &ip, uint16_t port, ConCb cb);
 		bool Insert(const db::BaseTable &data);
 		bool Update(const db::BaseTable &data);//更新数据，没填值的字段不会更新
@@ -61,6 +65,12 @@ namespace db {
 
 		template<class DbTable>
 			void RegInsertCb(void(*fun)(bool, const DbTable&))
+		{
+			DbTable t;
+			m_id2InertCb[t.TableId()] = (void *)fun;
+		}
+		template<class DbTable>
+		void RegDelCb(void(*fun)(bool, const DbTable&))
 		{
 			DbTable t;
 			m_id2InertCb[t.TableId()] = (void *)fun;

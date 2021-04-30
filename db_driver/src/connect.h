@@ -15,7 +15,7 @@
 #include "log_def.h"
 
 namespace db {
-	class BaseDbproxy;
+	class Dbproxy;
 	class DbClientCon;
 
 	class DbClientCon : public lc::ClientCon, public Singleton<DbClientCon>
