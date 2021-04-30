@@ -7,8 +7,9 @@
 #include "log_def.h"
 #include "svr_util/include/singleton.h"
 #include "svr_util/include/read_cfg.h"
-#include "cfg.h"
 #include "svr_util/include/typedef.h"
+#include "svr_util/include/easy_code.h"
+#include "cfg.h"
 #include "proto/dbTableDef.h"
+#include "proto/proto.h"
 
-static const int MAX_SQL_STR_SIZE = 1024 * 1024 * 4;

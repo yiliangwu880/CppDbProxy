@@ -16,7 +16,7 @@ struct Cfg
 		std::string db_psw;
 		std::string db_user;
 	};
-	struct S_mysql_d
+	struct S_mysql_db
 	{
 		std::string db_ip;
 		std::string db_name;

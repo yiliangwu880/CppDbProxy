@@ -89,8 +89,8 @@ namespace
 	void DbMgr::Start()
 	{
 		m_state = WAIT_CONNECT;
-		UNIT_INFO("connect %s %d", CfgMgr::Obj().dbproxy_svr_ip.c_str(), CfgMgr::Obj().dbproxy_svr_port);
-		Connect(CfgMgr::Obj().dbproxy_svr_ip, CfgMgr::Obj().dbproxy_svr_port);
+		UNIT_INFO("connect %s %d", CfgMgr::Ins().dbproxy_svr_ip.c_str(), CfgMgr::Ins().dbproxy_svr_port);
+		Connect(CfgMgr::Ins().dbproxy_svr_ip, CfgMgr::Ins().dbproxy_svr_port);
 	}
 
 
@@ -257,14 +257,14 @@ namespace
 
 UNITTEST(test_leak)
 {
-	UNIT_ASSERT(CfgMgr::Obj().Init());
-	SuMgr::Obj().Init();
-	EventMgr::Obj().Init();
+	UNIT_ASSERT(CfgMgr::Ins().Init());
+	SuMgr::Ins().Init();
+	EventMgr::Ins().Init();
 
 	DbMgr db;
 	db.Start();
 
-	EventMgr::Obj().Dispatch();
+	EventMgr::Ins().Dispatch();
 	UNIT_INFO("--------------------test_leak end--------------------");
 
 }

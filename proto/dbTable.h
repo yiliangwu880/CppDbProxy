@@ -47,7 +47,7 @@ namespace db {
 	template<typename T>
 	struct FieldTypeTraits
 	{
-		static const FieldType type = FieldType::t_int8_t;
+		static const FieldType type = FieldType::t_uint32_t;
 	};
 
 	template<>struct FieldTypeTraits<std::string> { static const FieldType type = FieldType::t_string; };
@@ -82,7 +82,6 @@ namespace db {
 		EASY_CODE(int64_t)
 		EASY_CODE(uint64_t)
 		EASY_CODE(double)
-		EASY_CODE(float)
 
 #undef EASY_CODE
 
@@ -111,7 +110,7 @@ namespace db {
 	struct FieldInfo
 	{
 		void *fieldPoint=nullptr; //域变量的真正指针
-		FieldType type= FieldType::t_int8_t;
+		FieldType type= FieldType::t_uint32_t;
 	};
 	class TableCfg
 	{

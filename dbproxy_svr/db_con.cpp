@@ -1,12 +1,10 @@
 #include "db_con.h"
-#include "parser.h"
 #include "mysql_con.h"
 #include "mongodb_con.h"
 
 using namespace su;
 using namespace lc;
 using namespace std;
-using namespace google::protobuf;
 using namespace db;
 
 bool DbConMgr::Init(const Cfg &cfg)

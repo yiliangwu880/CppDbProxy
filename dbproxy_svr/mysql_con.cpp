@@ -3,10 +3,11 @@
 #include <cppconn/datatype.h>
 #include <mysql_driver.h>
 #include <cppconn/prepared_statement.h>
-#include "parser.h"
 #include "mysql_con.h"
 #include "svr_util/include/str_util.h"
 #include "DbServer.h"
+#include <iostream>
+#include <iterator>  
 
 using namespace su;
 using namespace lc;
@@ -19,7 +20,7 @@ namespace
 	string BuildSelectCond(const db::BaseTable &data)
 	{
 		string str;
-		const Table *table = TableCfg::Ins().GetTable(data.tableId);
+		const Table *table = TableCfg::Ins().GetTable(data.TableId());
 		L_COND(table, "");
 
 		int idx = 0;
@@ -50,11 +51,11 @@ namespace
 			{
 			case FieldType::t_bytes:
 			case FieldType::t_string:
-				str += field.name + " = " + *pStr; //todo :blob内容，还没解决方案。
+				str += field.name + " = " + *(std::string *)pField; //todo :blob内容，还没解决方案。
 				break;
 #define EASY_CODE(fieldType)\
 			case FieldType::t_##fieldType:\
-				str += field.name + " = " + StrNum::NumToStr((RealTypeTraits<FieldType::t_##fieldType>::Type *)pField);\
+				str += field.name + " = " + StrNum::NumToStr(*(RealTypeTraits<FieldType::t_##fieldType>::Type *)pField);\
 				break;\
 
 					EASY_CODE(int32_t)
@@ -62,15 +63,15 @@ namespace
 					EASY_CODE(int64_t)
 					EASY_CODE(uint64_t)
 					EASY_CODE(double)
-					EASY_CODE(float)
 
 #undef EASY_CODE
 			default:
 				L_COND(table, "");
 				break;
 			}
-			idx++
+			idx++;
 		}
+		return str;
 	}
 
 	void SetFieldParam(const db::BaseTable &data, const Field &field, sql::PreparedStatement &pstmt)
@@ -125,7 +126,7 @@ void MysqlCon::CreateSelectSql(const db::BaseTable &data, const string &table_na
 	if (limit_num != 0)
 	{
 		sql_str += " limit ";
-		sql_str += StringTool::NumToStr(limit_num);
+		sql_str += StrNum::NumToStr(limit_num);
 	}
 }
 
@@ -164,23 +165,23 @@ bool MysqlCon::InitTable()
 bool MysqlCon::Insert(const db::BaseTable &data)
 {
 	L_COND_F(m_con);
-	const Table *table = TableCfg::Ins().GetTable(req.tableId);
+	const Table *table = TableCfg::Ins().GetTable(data.TableId());
 	L_COND_F(table);
 	//LOG_DEBUG("msg content=%s", msg->DebugString().c_str());
 	try {
 		string sql_str;
-		CreateInsertSql(*data, sql_str);
+		CreateInsertSql(data, sql_str);
 
 		//LOG_DEBUG("create insert sql=%s", sql_str.c_str());
 		unique_ptr< sql::PreparedStatement > pstmt(m_con->prepareStatement(sql_str));
 		for (const Field &field : table->m_vecField)
 		{
-			SetFieldParam(*data, field, *pstmt);
+			SetFieldParam(data, field, *pstmt);
 		}
 		int affect_row = pstmt->executeUpdate();
 		if (1 != affect_row)
 		{
-			L_ERROR("insert table fail. row=%d, table name[%s]", affect_row, table.name.c_str());
+			L_ERROR("insert table fail. row=%d, table name[%s]", affect_row, table->name.c_str());
 			return false;
 		}
 		return true;
@@ -193,12 +194,12 @@ bool MysqlCon::Insert(const db::BaseTable &data)
 
 bool MysqlCon::Update(const db::BaseTable &data)
 {
-	const Table *table = TableCfg::Ins().GetTable(data.tableId);
+	const Table *table = TableCfg::Ins().GetTable(data.TableId());
 	L_COND_F(table);
 	L_COND_F(m_con);
 	try {
 		string sql_str;
-		if (!CreateUpdateSql(*data, sql_str))
+		if (!CreateUpdateSql(data, sql_str))
 		{
 			L_ERROR("create update sql fail");
 			return false;
@@ -212,12 +213,12 @@ bool MysqlCon::Update(const db::BaseTable &data)
 			{
 				continue;
 			}
-			SetFieldParam(*data, field, *pstmt);
+			SetFieldParam(data, field, *pstmt);
 		}
 		int affect_row = pstmt->executeUpdate();
 		if (1 != affect_row)
 		{
-			L_ERROR("update table fail. row=%d, table name[%s]", affect_row, data.msg_name().c_str());
+			L_ERROR("update table fail. row=%d, table name[%s]", affect_row, table->name.c_str());
 			return false;
 		}
 		return true;
@@ -328,7 +329,7 @@ bool MysqlCon::SetField(BaseTable &data, const Field &field, const sql::ResultSe
 		switch (field.type)
 		{
 		default:
-			L_ERROR("unknow type %d", (int)field.type());
+			L_ERROR("unknow type %d", (int)field.type);
 			return false;
 		case FieldType::t_double:
 			*(double *)pField = res.getDouble(field.name);
@@ -352,17 +353,15 @@ bool MysqlCon::SetField(BaseTable &data, const Field &field, const sql::ResultSe
 			*(string *)pField = res.getString(field.name).asStdString();
 			break;
 		case FieldType::t_bytes:
-		{
-			unique_ptr<std::istream> inStream(res.getBlob(field.name()));
+			unique_ptr<std::istream> inStream(res.getBlob(field.name));
 			if (nullptr == inStream)
 			{
-				L_ERROR("res.getBlob() fail field.name()=%s", field.name().c_str());
+				L_ERROR("res.getBlob() fail field.name()=%s", field.name.c_str());
 				return false;
 			}
 			string &str = *(string *)pField;
-			str.assign(std::istreambuf_iterator<char>{inStream}, std::istreambuf_iterator<char>{});
+			str.assign(std::istreambuf_iterator<char>{*inStream}, std::istreambuf_iterator<char>{});
 			break;
-		}
 		}
 	}
 	catch (sql::InvalidArgumentException e) {
@@ -382,8 +381,9 @@ bool MysqlCon::SetField(BaseTable &data, const Field &field, const sql::ResultSe
 
 bool MysqlCon::CreateUpdateSql(const db::BaseTable &data, std::string &sql_str)
 {
-	const Table *table = TableCfg::Ins().GetTable(data.tableId);
-	L_COND_F(table);
+
+	const Table *table = TableCfg::Ins().GetTable(data.TableId());
+	L_COND(table, false);
 
 	sql_str += "UPDATE ";
 	sql_str += table->name;
@@ -402,7 +402,7 @@ bool MysqlCon::CreateUpdateSql(const db::BaseTable &data, std::string &sql_str)
 			{
 				str_key = *(string *)pField;
 			}
-			else(FieldType::t_uint64_t == field.type || FieldType::t_int64_t == field.type)
+			else if(FieldType::t_uint64_t == field.type || FieldType::t_int64_t == field.type)
 			{
 				num_key = *(uint64_t *)pField;
 			}
@@ -422,19 +422,17 @@ bool MysqlCon::CreateUpdateSql(const db::BaseTable &data, std::string &sql_str)
 		sql_str += field.name;
 		sql_str += "=?";
 		need_comma = true;
-	}
-	L_COND_F(key_field);
+	}	
+	L_COND(key_field, false);
 	sql_str += " ";
 	char where[1000]; 
 	if (0 == num_key)
 	{
-		str_key = ref->GetString(data, key_field);
 		snprintf(where, sizeof(where), "WHERE %s='%s'  limit 1", key_field->name.c_str(), str_key.c_str());
 	}
-	else//其他一致认为是uint64处理
+	else //其他一致认为是uint64处理
 	{
-		num_key = ref->GetUInt64(data, key_field);
-		snprintf(where, sizeof(where), "WHERE %s=%llu  limit 1", key_field->name.c_str(), num_key);
+		snprintf(where, sizeof(where), "WHERE %s=%lu  limit 1", key_field->name.c_str(), num_key);
 	}
 	sql_str += where;
 
@@ -442,15 +440,15 @@ bool MysqlCon::CreateUpdateSql(const db::BaseTable &data, std::string &sql_str)
 	return true;
 }
 
-bool MysqlCon::Query(const db::BaseTable &data, QueryResultRowCb cb)
+bool MysqlCon::Query(const db::BaseTable &data, uint16_t limit_num, QueryResultRowCb cb)
 {
 	L_COND_F(m_con);
-	const Table *table = TableCfg::Ins().GetTable(data.tableId);
+	const Table *table = TableCfg::Ins().GetTable(data.TableId());
 	L_COND_F(table);
 
 	try {
 		string sql_str;
-		CreateSelectSql(data, table->name, sql_str);
+		CreateSelectSql(data, table->name, limit_num, sql_str);
 //		L_DEBUG("select sql [%s]", sql_str.c_str());
 		unique_ptr< sql::Statement > stmt(m_con->createStatement());
 		stmt->execute(sql_str);
@@ -466,11 +464,11 @@ bool MysqlCon::Query(const db::BaseTable &data, QueryResultRowCb cb)
 			}
 			while (ret->next()) {
 				unique_ptr<db::BaseTable> pData = table->factor();
-				for (const Field &field : table.m_vecField)
+				for (const Field &field : table->m_vecField)
 				{
 					if (!SetField(*pData, field, *ret))
 					{
-						L_ERROR("set field failed, filed_name[%s]", field->name().c_str());
+						L_ERROR("set field failed, filed_name[%s]", field.name.c_str());
 						return false;
 					}
 				}
@@ -494,7 +492,7 @@ bool MysqlCon::Query(const db::BaseTable &data, QueryResultRowCb cb)
 bool MysqlCon::Del(const db::BaseTable &data)
 {
 	L_COND_F(m_con);
-	const Table *table = TableCfg::Ins().GetTable(data.tableId);
+	const Table *table = TableCfg::Ins().GetTable(data.TableId());
 	L_COND_F(table);
 	try {
 		string sql_str = "delete from ";
@@ -510,11 +508,11 @@ bool MysqlCon::Del(const db::BaseTable &data)
 			sql_str += "=";
 			if (field->type == FieldType::t_string)
 			{
-				sql_str += "'" + req.str_key() + "'";
+				sql_str += "'" + *(string *)pField + "'";
 			}
 			else if(field->type == FieldType::t_uint64_t || field->type == FieldType::t_int64_t)
 			{
-				sql_str += StringTool::NumToStr(*(uint64_t *)pField);
+				sql_str += StrNum::NumToStr(*(uint64_t *)pField);
 			}
 			else
 			{
@@ -541,7 +539,7 @@ bool MysqlCon::Del(const db::BaseTable &data)
 
 bool MysqlCon::CreateInsertSql(const db::BaseTable &data, std::string &sql_str)
 {
-	const Table *table = TableCfg::Ins().GetTable(data.tableId);
+	const Table *table = TableCfg::Ins().GetTable(data.TableId());
 	L_COND_F(table);
 
 	sql_str += "INSERT INTO ";
@@ -549,17 +547,20 @@ bool MysqlCon::CreateInsertSql(const db::BaseTable &data, std::string &sql_str)
 	sql_str += "(";
 
 	//循环拷贝名字
+	int i = 0;
 	for (const Field &field : table->m_vecField)
 	{
 		if (i > 0)
 		{
 			sql_str += ",";
 		}
-		sql_str += field->name;
+		sql_str += field.name;
+		i++;
 	}
 
 	sql_str += ") VALUES(";
 
+	i = 0;
 	for (const Field &field : table->m_vecField)
 	{
 		if (i > 0)
@@ -570,6 +571,7 @@ bool MysqlCon::CreateInsertSql(const db::BaseTable &data, std::string &sql_str)
 		{
 			sql_str += "?";
 		}
+		i++;
 	}
 
 	sql_str += ");";

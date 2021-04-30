@@ -8,8 +8,7 @@
 #include "mysql_connection.h"
 #include "cppconn/resultset.h"
 
-using QueryResultRowCb = std::function<void(db::BaseTable &data)>;
-class MysqlCon : public IDbCon, Singleton<MysqlCon>
+class MysqlCon : public IDbCon, public Singleton<MysqlCon>
 {
 private:
 	sql::Connection* m_con = nullptr;
@@ -20,10 +19,10 @@ public:
 	virtual bool ConnectDb(const Cfg &cfg) override;
 
 	virtual bool InitTable() override; //创建表， 检查表是否非法
-	virtual bool Insert(const db::BaseTable &req)override;
-	virtual bool Update(const db::BaseTable &req)override;
-	virtual bool Query(const db::BaseTable &req, QueryResultRowCb cb)override;
-	virtual bool Del(const db::BaseTable &req)	  override;
+	virtual bool Insert(const db::BaseTable &data)override;
+	virtual bool Update(const db::BaseTable &data)override;
+	virtual bool Query(const db::BaseTable &data, uint16_t limit_num, QueryResultRowCb cb)override;
+	virtual bool Del(const db::BaseTable &data)	  override;
 
 public:
 	bool TryCreateSchema(const std::string &name);
@@ -31,7 +30,7 @@ public:
 
 private:
 	void SetUpdatePreparePara(sql::PreparedStatement &pstmt, const db::BaseTable &data);
-	bool SetField(BaseTable &data, const Field &field, const sql::ResultSet& res);
+	bool SetField(db::BaseTable &data, const db::Field &field, const sql::ResultSet& res);
 
 	bool TryCreateTableSql(const db::Table &table, std::string &sql_str);
 	bool CreateInsertSql(const db::BaseTable &data, std::string &sql_str);

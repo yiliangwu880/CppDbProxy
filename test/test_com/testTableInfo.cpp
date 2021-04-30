@@ -52,7 +52,7 @@ UNITTEST(testTableInfo)
 		{
 			const Field f = table.m_vecField[1];
 			UNIT_ASSERT(f.name == "id1");
-			UNIT_ASSERT(f.type == FieldType::t_uint8_t);
+			UNIT_ASSERT(f.type == FieldType::t_uint32_t);
 			UNIT_ASSERT(f.keyType == KeyType::NONE);
 			UNIT_ASSERT(f.pOffset == sizeof(uint64_t) * 2 + sizeof(uint64_t));
 			UNIT_ASSERT(f.fieldSize == sizeof(Player3::id1));
@@ -74,7 +74,7 @@ UNITTEST(testTableInfo)
 		{
 			const Field f = table.m_vecField[4];
 			UNIT_ASSERT(f.name == "id3");
-			UNIT_ASSERT(f.type == FieldType::t_int8_t);
+			UNIT_ASSERT(f.type == FieldType::t_uint32_t);
 			UNIT_ASSERT(f.keyType == KeyType::NONE);
 			UNIT_ASSERT(f.fieldSize == sizeof(Player3::id3));
 		} 

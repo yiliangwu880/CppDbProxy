@@ -30,11 +30,11 @@ namespace db
 	{
 		Player3() : BaseTable("Player3", 3) {}
 		uint64_t id =0;
-		uint8_t id1  =0;
+		uint32_t id1  =0;
 		uint64_t id2 =0;
 
 		Bytes myblob1;
-		int8_t id3   =0;
+		uint32_t id3   =0;
 		std::string myblob2;
 	};
 	struct Player4 : public BaseTable

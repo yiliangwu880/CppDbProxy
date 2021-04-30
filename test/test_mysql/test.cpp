@@ -66,8 +66,8 @@ namespace
 	void DbMgr::Start()
 	{
 		m_state = WAIT_CONNECT;
-		UNIT_INFO("connect %s %d", CfgMgr::Obj().dbproxy_svr_ip.c_str(), CfgMgr::Obj().dbproxy_svr_port);
-		Connect(CfgMgr::Obj().dbproxy_svr_ip, CfgMgr::Obj().dbproxy_svr_port);
+		UNIT_INFO("connect %s %d", CfgMgr::Ins().dbproxy_svr_ip.c_str(), CfgMgr::Ins().dbproxy_svr_port);
+		Connect(CfgMgr::Ins().dbproxy_svr_ip, CfgMgr::Ins().dbproxy_svr_port);
 	}
 
 
@@ -261,7 +261,7 @@ namespace
 		{
 			UNIT_ASSERT(is_ok);
 			UNIT_INFO("sql del end");
-			EventMgr::Obj().StopDispatch();
+			EventMgr::Ins().StopDispatch();
 		}
 		else if (WAIT_DROP_TABLE == m_state)
 		{
@@ -294,13 +294,13 @@ namespace
 
 UNITTEST(test_mysql)
 {
-	UNIT_ASSERT(CfgMgr::Obj().Init());
-	EventMgr::Obj().Init();
+	UNIT_ASSERT(CfgMgr::Ins().Init());
+	EventMgr::Ins().Init();
 
 	DbMgr db;
 	db.Start();
 
-	EventMgr::Obj().Dispatch();
+	EventMgr::Ins().Dispatch();
 	UNIT_INFO("--------------------test_mysql end--------------------");
 
 }

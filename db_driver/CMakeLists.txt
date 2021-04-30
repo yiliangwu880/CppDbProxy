@@ -11,13 +11,14 @@ INCLUDE_DIRECTORIES(system ../external/)
 
 # 查找当前目录下的所有源文件
 # 并将名称保存到 ALL_SRC_FILE 变量
+file(GLOB_RECURSE SRCS  ${PROJECT_SOURCE_DIR} "../proto/*.cpp")
 file(GLOB_RECURSE ALL_SRC_FILE  ${PROJECT_SOURCE_DIR} "*.h")
 file(GLOB_RECURSE ALL_SRC_FILE2  ${PROJECT_SOURCE_DIR} "*.cpp")
 
 
 # 指定生成目标
-ADD_LIBRARY(${project_name} STATIC ${ALL_SRC_FILE} ${ALL_SRC_FILE2} )
+ADD_LIBRARY(${project_name} STATIC ${SRCS} ${ALL_SRC_FILE} ${ALL_SRC_FILE2} )
 #cotire(base)
 
 # 设置链接库
-target_link_libraries(${project_name} svr_util libcevent_cpp libprotobuf.a)
+target_link_libraries(${project_name} svr_util libcevent_cpp)

@@ -1,11 +1,11 @@
 #include "DbServer.h"
 #include "svr_util/include/read_cfg.h"
 #include "db_con.h"
-#include "parser.h"
 
 using namespace std;
 using namespace lc;
 using namespace db;
+using namespace su;
 using namespace proto;
 
 namespace
@@ -19,22 +19,22 @@ namespace
 	//	char data[0]; //一个db 对象
 	//};
 	template<class ProtoType>
-	ProtoType *BuildMsgPack(MsgPack &msg, db::BaseTable &data)
+	ProtoType *BuildMsgPack(MsgPack &msg, const db::BaseTable &data)
 	{
 		ProtoType *p = new (msg.data)ProtoType;
 		//data可用长度
 		size_t len = ArrayLen(msg.data) - sizeof(*p);
 		if (!TableCfg::Ins().Pack(data, p->data, len))		{
-			L_ERROR("pack fail");			return nullptr;		}		msg.len = sizeof(ProtoType) + len;	}
+			L_ERROR("pack fail");			return nullptr;		}		msg.len = sizeof(ProtoType) + len;		return p;	}
 }
 
 
 InnerSvrCon::InnerSvrCon()
 {
-	RegProtoParse<insert_cs>(&BaseDbproxy::ParseInsert);
-	RegProtoParse<query_cs>(&BaseDbproxy::ParseQuery);
-	RegProtoParse<update_cs>(&BaseDbproxy::ParseUpdate);
-	RegProtoParse<del_cs>(&BaseDbproxy::ParseDel);
+	RegProtoParse<insert_cs>(&ParseInsert);
+	RegProtoParse<query_cs>(&ParseQuery);
+	RegProtoParse<update_cs>(&ParseUpdate);
+	RegProtoParse<del_cs>(&ParseDel);
 }
 
 void InnerSvrCon::OnRecv(const MsgPack &msg)
@@ -45,6 +45,22 @@ void InnerSvrCon::OnRecv(const MsgPack &msg)
 	(*fun)(*this, msg.data, msg.len);
 }
 
+void InnerSvrCon::ParseInsert(InnerSvrCon &con, const proto::insert_cs *req, uint32_t req_len)
+{
+	L_COND_V(req_len >= sizeof(req));
+	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(req->data, req_len - sizeof(req));
+	L_COND_V(nullptr != pTable);
+	BaseTable &data = *pTable;
+	IDbCon &dbCon = DbConMgr::Ins().GetCon();
+
+	bool ret = dbCon.Insert(data);
+	MsgPack msg;
+	insert_sc *rsp = BuildMsgPack<insert_sc>(msg, data);
+	L_COND_V(rsp);
+	rsp->ret = ret;
+	con.SendData(msg);
+}
+
 void InnerSvrCon::ParseQuery(InnerSvrCon &con, const proto::query_cs *req, uint32_t req_len)
 {
 	L_COND_V(req_len >= sizeof(req));
@@ -53,22 +69,32 @@ void InnerSvrCon::ParseQuery(InnerSvrCon &con, const proto::query_cs *req, uint3
 	BaseTable &data = *pTable;
 	IDbCon &dbCon = DbConMgr::Ins().GetCon();
 
-	QueryResultRowCb cb = [](db::BaseTable &data)
+	QueryResultRowCb cb = [&con](db::BaseTable &data)
 	{
 		MsgPack msg;
 		query_sc *rsp = BuildMsgPack<query_sc>(msg, data);
 		L_COND_V(rsp);
 		rsp->ret = true;
-		return SendData(msg);
+		con.SendData(msg);
 	};
-	if (!dbCon.Query(data, cb))
+	if (!dbCon.Query(data, req->limit_num, cb))
 	{//response
 		MsgPack msg;
 		query_sc *rsp = BuildMsgPack<query_sc>(msg, data);
 		L_COND_V(rsp);
 		rsp->ret = false;
-		return SendData(msg);
+		con.SendData(msg);
 	}
+}
+
+void InnerSvrCon::ParseUpdate(InnerSvrCon &con, const proto::update_cs *msg, uint32_t len)
+{
+
+}
+
+void InnerSvrCon::ParseDel(InnerSvrCon &con, const proto::del_cs *msg, uint32_t len)
+{
+
 }
 
 void InnerSvrCon::OnConnected()
