@@ -31,24 +31,26 @@ namespace
 
 InnerSvrCon::InnerSvrCon()
 {
-	RegProtoParse<insert_cs>(&ParseInsert);
-	RegProtoParse<query_cs>(&ParseQuery);
-	RegProtoParse<update_cs>(&ParseUpdate);
-	RegProtoParse<del_cs>(&ParseDel);
+
+	RegProtoParse<decltype(ParseInsert)>(ParseInsert);
+	RegProtoParse<decltype(ParseQuery)>(ParseQuery);
+	RegProtoParse<decltype(ParseUpdate)>(ParseUpdate);
+	RegProtoParse<decltype(ParseDel)>(ParseDel);
+
+
 }
 
 void InnerSvrCon::OnRecv(const MsgPack &msg)
 {
-	using ComFun = void(InnerSvrCon &con, const void *protoMsg, decltype(msg.len)); //消息回调函数， 抽象类型。 
+	using ComFun = void(InnerSvrCon &con, const char &protoMsg); //消息回调函数， 抽象类型。 
 	uint16_t cmdId = *(const uint16_t *)msg.data; //约定协议前 uint16_t 为 cmdId.  
 	ComFun *fun = (ComFun *)(m_cmdId2Cb[cmdId]);
-	(*fun)(*this, msg.data, msg.len);
+	(*fun)(*this, *(const char *)(msg.data));
 }
 
-void InnerSvrCon::ParseInsert(InnerSvrCon &con, const proto::insert_cs *req, uint32_t req_len)
+void InnerSvrCon::ParseInsert(InnerSvrCon &con, const proto::insert_cs &req)
 {
-	L_COND_V(req_len >= sizeof(req));
-	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(req->data, req_len - sizeof(req));
+	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(req.data, req.dataLen);
 	L_COND_V(nullptr != pTable);
 	BaseTable &data = *pTable;
 	IDbCon &dbCon = DbConMgr::Ins().GetCon();
@@ -61,10 +63,9 @@ void InnerSvrCon::ParseInsert(InnerSvrCon &con, const proto::insert_cs *req, uin
 	con.SendData(msg);
 }
 
-void InnerSvrCon::ParseQuery(InnerSvrCon &con, const proto::query_cs *req, uint32_t req_len)
+void InnerSvrCon::ParseQuery(InnerSvrCon &con, const proto::query_cs &req)
 {
-	L_COND_V(req_len >= sizeof(req));
-	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(req->data, req_len - sizeof(req));
+	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(req.data, req.dataLen);
 	L_COND_V(nullptr != pTable);
 	BaseTable &data = *pTable;
 	IDbCon &dbCon = DbConMgr::Ins().GetCon();
@@ -77,7 +78,7 @@ void InnerSvrCon::ParseQuery(InnerSvrCon &con, const proto::query_cs *req, uint3
 		rsp->ret = true;
 		con.SendData(msg);
 	};
-	if (!dbCon.Query(data, req->limit_num, cb))
+	if (!dbCon.Query(data, req.limit_num, cb))
 	{//response
 		MsgPack msg;
 		query_sc *rsp = BuildMsgPack<query_sc>(msg, data);
@@ -87,12 +88,12 @@ void InnerSvrCon::ParseQuery(InnerSvrCon &con, const proto::query_cs *req, uint3
 	}
 }
 
-void InnerSvrCon::ParseUpdate(InnerSvrCon &con, const proto::update_cs *msg, uint32_t len)
+void InnerSvrCon::ParseUpdate(InnerSvrCon &con, const proto::update_cs &msg)
 {
 
 }
 
-void InnerSvrCon::ParseDel(InnerSvrCon &con, const proto::del_cs *msg, uint32_t len)
+void InnerSvrCon::ParseDel(InnerSvrCon &con, const proto::del_cs &msg)
 {
 
 }

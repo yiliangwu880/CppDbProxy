@@ -64,26 +64,25 @@ bool db::BaseDbproxy::Query(const db::BaseTable &data, uint32 limit_num/*=1*/)
 
 void db::BaseDbproxy::OnRecv(const lc::MsgPack &msg)
 {
-	using ComFun = void(const char &, decltype(msg.len)); //消息回调函数， 抽象类型。 
+	using ComFun = void(const char &); //消息回调函数， 抽象类型。 
 	uint16_t cmdId = *(const uint16_t *)msg.data; //约定协议前 uint16_t 为 cmdId. 比如 
 	ComFun *fun = (ComFun *)(m_cmdId2Cb[cmdId]);
 	const char *pMsg = &(msg.data[0]);
-	(*fun)(*pMsg, msg.len);
+	(*fun)(*pMsg);
 }
 
-void db::BaseDbproxy::ParseInsert(const proto::insert_sc &msg, uint32_t len)
+void db::BaseDbproxy::ParseInsert(const proto::insert_sc &msg)
 {
-	//L_COND_V(len >= sizeof(msg));
-	//std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(msg->data, len - sizeof(msg));
-	//L_COND_V(nullptr != pTable);
+	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(msg.data, msg.dataLen);
+	L_COND_V(nullptr != pTable);
 
-	//using ComFun = void(bool, const BaseTable& ); //查询回调， 抽象类型。 
-	//ComFun *fun = (ComFun *)(BaseDbproxy::Ins().m_id2InertCb[pTable->TableId()]);
-	//BaseTable &table = *(pTable.get());
-	//(*fun)(msg->ret, table);
+	using ComFun = void(bool, const BaseTable& ); //查询回调， 抽象类型。 
+	ComFun *fun = (ComFun *)(BaseDbproxy::Ins().m_id2InertCb[pTable->TableId()]);
+	BaseTable &table = *(pTable.get());
+	(*fun)(msg.ret, table);
 }
 
-void db::BaseDbproxy::ParseQuery(const proto::query_sc &msg, uint32_t len)
+void db::BaseDbproxy::ParseQuery(const proto::query_sc &msg)
 {
 
 }

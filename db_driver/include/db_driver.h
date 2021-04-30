@@ -68,26 +68,13 @@ namespace db {
 
 	private:
 		//注册 proto消息回调
-		//template<class ProtoMsg, class Fun>
-		//void RegProtoParse(Fun fun)
-		//{
-		//	ProtoMsg t;
-		//	if (m_cmdId2Cb.find(t.id) != m_cmdId2Cb.end())
-		//	{
-		//		L_ERROR("repeated reg");
-		//		return;
-		//	}
-		//	m_cmdId2Cb[t.id] = (void *)fun;
-		//}
-
-
 		template<class Fun> //Fun类型要求 void (const insert_sc *msg, uint32_t len);, 其中 insert_sc可变
 		void RegProtoParse(Fun fun)
 		{
-			typedef typename std::function<Fun>::first_argument_type P1type;
-			 typedef typename std::remove_reference<P1type>::type Type1;
-			 typedef typename std::remove_const<Type1>::type Type;
-			 Type msg;
+			typedef typename std::function<Fun>::argument_type MsgRefType;
+			typedef typename std::remove_reference<MsgRefType>::type MsgConstType;
+			typedef typename std::remove_const<MsgConstType>::type Type;
+			Type msg;
 			if (m_cmdId2Cb.find(msg.id) != m_cmdId2Cb.end())
 			{
 				L_ERROR("repeated reg");
@@ -98,9 +85,9 @@ namespace db {
 
 		void OnRecv(const lc::MsgPack &msg);
 		//@len 表示 msg 有效长度
-		static void ParseInsert(const proto::insert_sc &msg, uint32_t len);
-		static void ParseQuery(const proto::query_sc &msg, uint32_t len);
-		static void ParseUpdate(const proto::update_sc &msg, uint32_t len);
-		static void ParseDel(const proto::del_sc &msg, uint32_t len);
+		static void ParseInsert(const proto::insert_sc &msg);
+		static void ParseQuery(const proto::query_sc &msg);
+		static void ParseUpdate(const proto::update_sc &msg);
+		static void ParseDel(const proto::del_sc &msg);
 	};
 }

@@ -14,18 +14,21 @@ namespace proto {
 	struct insert_cs
 	{
 		const uint16_t id = 1;
+		uint32_t dataLen; //data有效字节数
 		char data[0]; //任意类型db 对象, 序列化的结果（会省略掉无内容的值，减少流量消耗）。
 	};
 	struct insert_sc
 	{
 		const uint16_t id = 2;
 		bool ret;
+		uint32_t dataLen;
 		char data[0]; //有值的内容作为条件
 	};
 
 	struct update_cs
 	{
 		const uint16_t id = 3;
+		uint32_t dataLen;
 		char data[0]; //没填值的字段不会更新
 	};
 	struct update_sc
@@ -38,6 +41,7 @@ namespace proto {
 	{
 		const uint16_t id = 5;
 		uint16_t limit_num;
+		uint32_t dataLen;
 		char data[0]; //有值的内容作为条件
 	};
 	//多行结果，分多次 query_sc 协议发送
@@ -45,12 +49,14 @@ namespace proto {
 	{
 		const uint16_t id = 6;
 		bool ret;
+		uint32_t dataLen;
 		char data[0]; //一个db 对象. 失败的情况， 返回请求的相同内容
 	};
 
 	struct del_cs
 	{
 		const uint16_t id = 7;
+		uint32_t dataLen;
 		char data[0];//有值的内容作为条件
 	};
 	struct del_sc
