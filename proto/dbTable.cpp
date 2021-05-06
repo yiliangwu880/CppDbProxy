@@ -70,6 +70,7 @@ bool db::TableCfg::Pack(const BaseTable &obj, char *str, size_t &len)
 	auto it = m_allTable.find(obj.TableId());
 	if (it == m_allTable.end())
 	{
+		L_ERROR("find talbeId fail, %d", obj.TableId());
 		return false;
 	}
 	const Table &table = it->second;
@@ -243,7 +244,7 @@ void db::TableCfg::InitTableCfg()
 		};
 		//field 1
 		{
-			Field &field = table.m_allField["id"];
+			Field field;
 			field.name = "id";
 			field.type = FieldTypeTraits<decltype(t.id)>::type;
 			field.pOffset = (size_t)&(((decltype(t) *)(nullptr))->id);
@@ -256,7 +257,6 @@ void db::TableCfg::InitTableCfg()
 			L_ASSERT(lastOffset <= field.pOffset); //field定义顺序和执行不一致
 			lastOffset = field.pOffset;
 
-			table.pKeyOffset = (uint8_t *)&(((decltype(t) *)(nullptr))->id);
 			field.keyType = KeyType::MAIN;
 			table.m_vecField.push_back(field);
 		}
@@ -277,7 +277,7 @@ void db::TableCfg::InitTableCfg()
 	table.name = t.className;\
 	table.tableId = t.TableId();\
 	L_ASSERT((m_tableIds.insert(table.tableId)).second);\
-	L_ASSERT(0 == &(((decltype(t) *)(nullptr))->className));\
+	L_ASSERT((void*)8 == &(((decltype(t) *)(nullptr))->className));\
 	L_ASSERT(string(t.className) == #def_name);\
 	size_t lastOffset = sizeof(BaseTable);\
 	table.factor = []() {\
@@ -288,7 +288,7 @@ void db::TableCfg::InitTableCfg()
 
 #define DB_FIELD(fieldName)\
 	{\
-	Field &field = table.m_allField[#fieldName];\
+	Field field;\
 	field.name = #fieldName;\
 	field.type = FieldTypeTraits<decltype(t.fieldName)>::type;\
 	field.pOffset = (size_t)&(((decltype(t) *)(nullptr))->fieldName);\
@@ -306,7 +306,7 @@ void db::TableCfg::InitTableCfg()
 
 #define DB_MAIN_KEY(fieldName)	 \
 	{\
-	Field &field = table.m_allField[#fieldName];\
+	Field field;\
 	field.name = #fieldName;\
 	field.type = FieldTypeTraits<decltype(t.fieldName)>::type;\
 	field.pOffset = (size_t)&(((decltype(t) *)(nullptr))->fieldName);\
@@ -318,7 +318,6 @@ void db::TableCfg::InitTableCfg()
 	}\
 	L_ASSERT(lastOffset <= field.pOffset);\
 	lastOffset = field.pOffset;\
-	table.pKeyOffset = (size_t)&(((decltype(t) *)(nullptr))->fieldName);\
 	field.keyType = KeyType::MAIN;\
 	table.m_vecField.push_back(field);\
 	}\
@@ -326,7 +325,7 @@ void db::TableCfg::InitTableCfg()
 
 #define DB_INDEX_KEY(fieldName)	 \
 	{\
-	Field &field = table.m_allField[#fieldName];\
+	Field field;\
 	field.name = #fieldName;\
 	field.type = FieldTypeTraits<decltype(t.fieldName)>::type;\
 	field.pOffset = (size_t)&(((decltype(t) *)(nullptr))->fieldName);\

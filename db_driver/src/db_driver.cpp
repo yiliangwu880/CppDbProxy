@@ -27,6 +27,7 @@ namespace
 		//要求dataLen data[0]必须最后定义
 		static_assert((size_t)&(((ProtoType *)(nullptr))->dataLen) == sizeof(ProtoType)-sizeof(uint32_t));
 		static_assert((size_t)&(((ProtoType *)(nullptr))->data) == sizeof(ProtoType));
+		static_assert((size_t)&(((ProtoType *)(nullptr))->id) == 0); //id必须首先定义
 
 		ProtoType *p = new (msg.data)ProtoType;
 		//data可用长度
@@ -35,15 +36,12 @@ namespace
 			L_ERROR("pack fail");			return nullptr;		}		p->dataLen = len;		msg.len = sizeof(ProtoType) + len;		return p;	}
 }
 
-
 db::Dbproxy::Dbproxy()
 {
 	RegProtoParse(ParseInsert);
 	RegProtoParse(ParseQuery);
-	RegProtoParse(ParseUpdate);
 	RegProtoParse(ParseDel);
 }
-
 
 void db::Dbproxy::Init(const std::string &ip, uint16_t port, ConCb cb)
 {
@@ -100,11 +98,27 @@ void db::Dbproxy::ParseInsert(const proto::insert_sc &msg)
 
 	using ComFun = void(bool, const BaseTable& ); //查询回调， 抽象类型。 
 	ComFun *fun = (ComFun *)(Dbproxy::Ins().m_id2InertCb[pTable->TableId()]);
-	BaseTable &table = *(pTable.get());
-	(*fun)(msg.ret, table);
+	(*fun)(msg.ret, *(pTable.get()));
 }
 
 void db::Dbproxy::ParseQuery(const proto::query_sc &msg)
 {
+	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(msg.data, msg.dataLen);
+	L_COND_V(nullptr != pTable);
 
+	using ComFun = void(bool, const BaseTable&); //查询回调， 抽象类型。 
+	ComFun *fun = (ComFun *)(Dbproxy::Ins().m_id2QueryCb[pTable->TableId()]);
+	(*fun)(msg.ret, *(pTable.get()));
+}
+
+
+
+void db::Dbproxy::ParseDel(const proto::del_sc &msg)
+{
+	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(msg.data, msg.dataLen);
+	L_COND_V(nullptr != pTable);
+
+	using ComFun = void(bool, const BaseTable&); //查询回调， 抽象类型。 
+	ComFun *fun = (ComFun *)(Dbproxy::Ins().m_id2DelCb[pTable->TableId()]);
+	(*fun)(msg.ret, *(pTable.get()));
 }

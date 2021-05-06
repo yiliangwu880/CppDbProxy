@@ -24,12 +24,7 @@ public:
 	virtual bool Query(const db::BaseTable &data, uint16_t limit_num, QueryResultRowCb cb)override;
 	virtual bool Del(const db::BaseTable &data)	  override;
 
-public:
-	bool TryCreateSchema(const std::string &name);
-
-
 private:
-	void SetUpdatePreparePara(sql::PreparedStatement &pstmt, const db::BaseTable &data);
 	bool SetField(db::BaseTable &data, const db::Field &field, const sql::ResultSet& res);
 
 	bool TryCreateTableSql(const db::Table &table, std::string &sql_str);

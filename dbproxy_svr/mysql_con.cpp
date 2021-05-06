@@ -82,11 +82,11 @@ namespace
 		default:
 			L_ERROR("unknow type %d", (int)field.type);
 			break;
-		case FieldType::t_uint32_t:
-			pstmt.setUInt(field.idx, *(uint32_t *)pField);
-			break;
 		case FieldType::t_int32_t:
 			pstmt.setInt(field.idx, *(int32_t *)pField);
+			break;
+		case FieldType::t_uint32_t:
+			pstmt.setUInt(field.idx, *(uint32_t *)pField);
 			break;
 		case FieldType::t_int64_t:
 			pstmt.setInt64(field.idx, *(int64_t *)pField);
@@ -259,7 +259,7 @@ bool MysqlCon::ConnectDb(const Cfg &cfg)
 		m_con = driver->connect(connection_properties);
 		m_con->setSchema(mysql_db.db_name);
 		L_DEBUG("connect mysql db ok");
-		
+		InitTable();
 		return true;
 	}
 	catch (sql::SQLException &e) {
@@ -276,10 +276,9 @@ bool MysqlCon::TryCreateTableSql(const db::Table &table, std::string &sql_str)
 
 	string main_key;
 	vector<string> index_key;
-	for (auto &v : table.m_allField)
+	for (const db::Field &field : table.m_vecField)
 	{
-		const std::string &name = v.first;
-		const db::Field &field = v.second;
+		const std::string &name = field.name;
 		//每个域 字符串模板 = "`a` varchar(11) NOT NULL,"
 		sql_str += "`";
 		sql_str += name;
@@ -381,7 +380,6 @@ bool MysqlCon::SetField(BaseTable &data, const Field &field, const sql::ResultSe
 
 bool MysqlCon::CreateUpdateSql(const db::BaseTable &data, std::string &sql_str)
 {
-
 	const Table *table = TableCfg::Ins().GetTable(data.TableId());
 	L_COND(table, false);
 
@@ -460,6 +458,7 @@ bool MysqlCon::Query(const db::BaseTable &data, uint16_t limit_num, QueryResultR
 			if (0 == row_num && nullptr == ret) //一个数据都没有
 			{
 				L_ERROR("execute sql fail [%s]", sql_str.c_str());
+				cb(data);
 				return false;
 			}
 			while (ret->next()) {
@@ -485,6 +484,7 @@ bool MysqlCon::Query(const db::BaseTable &data, uint16_t limit_num, QueryResultR
 	}
 	catch (sql::SQLException &e) {
 		L_ERROR("%s, MySQL error code:%d, SQLState:%s", e.what(), e.getErrorCode(), e.getSQLStateCStr());
+		cb(data);
 		return false;
 	}
 }

@@ -46,10 +46,10 @@ void BaseApp::Start(int argc, char* argv[], const string &app_name, bool is_daem
 		}
 	}
 	SuMgr::Ins().Init();
-
+	L_INFO("is_daemon =%d", is_daemon);
 	//start or stop proccess
 	SingleProgress::Ins().Check(argc, argv, app_name.c_str(), is_daemon);
-
+	
 	lc::LogMgr::Ins().SetLogPrinter(MyLcLog::Ins());
 
 	if (!OnStart())
@@ -57,7 +57,17 @@ void BaseApp::Start(int argc, char* argv[], const string &app_name, bool is_daem
 		L_INFO("start fail");
 		return;
 	}
+	lc::Timer tm;
+	auto f= []()
+	{
+		if (SingleProgress::Ins().IsExit())
+		{
+			L_INFO("exit");
+			exit(1);
+		}
+	};
 
+	tm.StartTimerSec(1, f, true);
 	EventMgr::Ins().Dispatch();
 	L_INFO("main end");
 }

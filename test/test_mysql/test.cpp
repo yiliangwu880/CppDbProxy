@@ -19,55 +19,31 @@ using namespace lc;
 
 namespace
 {
-	class DbMgr: public db::BaseDbproxy
-	{
-	public:
-		enum State
-		{
-			WAIT_CONNECT,
-			WAIT_DROP_TABLE, //删除上次测试的table
-			WAIT_INIT_TALBE,
-			WAIT_INSERT,
-			WAIT_UPDATE,
-			WAIT_GET,
-			WAIT_DEL,
-			WAIT_SQL_INSERT,
-			WAIT_GET_SQL_INSERT,
-			WAIT_SQL_DEL,
-		};
-		State m_state;
-		TestTable m_msg;
-		SubMsg m_sub;
-		TTT3 m_t;
-	public:
-		DbMgr();
 
-		void Start();
-		void StartInitTable();
+	static void OnCon();
+	static void Start();
+	static void StartInitTable();
 
-		virtual void OnCon();
-		virtual void OnDiscon();
-		virtual void OnRspInitTable(bool is_ok) ;
-		virtual void OnRspInsert(const db::RspInsertData &rsp) ;
-		virtual void OnRspUpdate(const db::RspUpdateData &rsp) ;
-		virtual void OnRspGet(const db::RspGetData &rsp) ;
-		virtual void OnRspDel(const db::RspDelData &rsp) ;
-		virtual void OnRspSql(bool is_ok);
-	};
+	static void OnCon();
+	static void OnDiscon();
+	static void OnRspInitTable(bool is_ok);
+	static void OnRspInsert(const db::RspInsertData &rsp);
+	static void OnRspUpdate(const db::RspUpdateData &rsp);
+	static void OnRspGet(const db::RspGetData &rsp);
+	static void OnRspDel(const db::RspDelData &rsp);
+	static void OnRspSql(bool is_ok);
 
 
-
-
-	DbMgr::DbMgr()
-	{
-	}
-
-
-	void DbMgr::Start()
+	void Start()
 	{
 		m_state = WAIT_CONNECT;
 		UNIT_INFO("connect %s %d", CfgMgr::Ins().dbproxy_svr_ip.c_str(), CfgMgr::Ins().dbproxy_svr_port);
-		Connect(CfgMgr::Ins().dbproxy_svr_ip, CfgMgr::Ins().dbproxy_svr_port);
+		db::Dbproxy::Ins().Init(CfgMgr::Ins().dbproxy_svr_ip, CfgMgr::Ins().dbproxy_svr_port, OnCon);
+	}
+
+	void DbMgr::OnCon()
+	{
+		
 	}
 
 
@@ -79,14 +55,6 @@ namespace
 		req.add_msg_name("TestTable");
 		req.add_msg_name("TTT3");
 		InitTable(req);
-	}
-
-	void DbMgr::OnCon()
-	{
-		UNIT_ASSERT(m_state == WAIT_CONNECT);
-		m_state = WAIT_DROP_TABLE;
-		ExecuteSql("DROP TABLE TTT3");
-		ExecuteSql("DROP TABLE TestTable");
 	}
 
 
@@ -295,10 +263,8 @@ namespace
 UNITTEST(test_mysql)
 {
 	UNIT_ASSERT(CfgMgr::Ins().Init());
-	EventMgr::Ins().Init();
 
-	DbMgr db;
-	db.Start();
+	Start();
 
 	EventMgr::Ins().Dispatch();
 	UNIT_INFO("--------------------test_mysql end--------------------");

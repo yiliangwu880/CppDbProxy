@@ -33,7 +33,7 @@ UNITTEST(testTableInfo)
 		UNIT_ASSERT(f.name == "id2");
 		UNIT_ASSERT(f.type == FieldType::t_uint64_t);
 		UNIT_ASSERT(f.keyType == KeyType::MAIN);
-		UNIT_ASSERT(f.pOffset == sizeof(uint64_t) * 2);
+		UNIT_ASSERT(f.pOffset == sizeof(BaseTable));
 		UNIT_ASSERT(f.fieldSize == sizeof(Player2::id2));
 	}
 
@@ -46,7 +46,7 @@ UNITTEST(testTableInfo)
 			UNIT_ASSERT(f.name == "id");
 			UNIT_ASSERT(f.type == FieldType::t_uint64_t);
 			UNIT_ASSERT(f.keyType == KeyType::MAIN);
-			UNIT_ASSERT(f.pOffset == sizeof(uint64_t) * 2);
+			UNIT_ASSERT(f.pOffset == sizeof(BaseTable));
 			UNIT_ASSERT(f.fieldSize == sizeof(Player3::id));
 		}
 		{
@@ -54,14 +54,16 @@ UNITTEST(testTableInfo)
 			UNIT_ASSERT(f.name == "id1");
 			UNIT_ASSERT(f.type == FieldType::t_uint32_t);
 			UNIT_ASSERT(f.keyType == KeyType::NONE);
-			UNIT_ASSERT(f.pOffset == sizeof(uint64_t) * 2 + sizeof(uint64_t));
+			UNIT_ASSERT(f.pOffset == sizeof(BaseTable) + sizeof(uint64_t));
 			UNIT_ASSERT(f.fieldSize == sizeof(Player3::id1));
 		}
 		{
+			struct A { uint64_t i;uint32_t i2; };
 			const Field f = table.m_vecField[2];
 			UNIT_ASSERT(f.name == "id2");
 			UNIT_ASSERT(f.type == FieldType::t_uint64_t);
 			UNIT_ASSERT(f.keyType == KeyType::INDEX);
+			UNIT_ASSERT(f.pOffset == sizeof(BaseTable) + sizeof(A));
 			UNIT_ASSERT(f.fieldSize == sizeof(Player3::id2));
 		}
 		{

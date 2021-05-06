@@ -1,6 +1,5 @@
 #include "db_con.h"
 #include "mysql_con.h"
-#include "mongodb_con.h"
 
 using namespace su;
 using namespace lc;
@@ -14,11 +13,11 @@ bool DbConMgr::Init(const Cfg &cfg)
 	{
 		m_con = &MysqlCon::Ins();
 	}
-	else if (cfg.select_db == "mongodb_db")
-	{
-		return false;
-		m_con = &MongodbConn::Ins();
-	}
+	//else if (cfg.select_db == "mongodb_db")
+	//{
+	//	return false;
+	//	m_con = &MongodbConn::Ins();
+	//}
 	else
 	{
 		L_ERROR("cfg.select_db value is error");

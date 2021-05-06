@@ -12,14 +12,13 @@ namespace db {
 	//定义类目的，为了让 TableCfg::GetFieldPoint 能编译期 检查错误调用
 	class BaseTable
 	{
+		const char *className = nullptr;
+		uint16_t tableId; //table类型唯一标识
 	public:
 		friend class TableCfg;
 		BaseTable(const char *name, uint16_t id) : className(name), tableId(id){}
 		virtual ~BaseTable() {}; //必须要虚析构函数，才能让 unique_ptr<BaseTable> 正确释放。
 		uint16_t TableId() const { return tableId; }
-	private:
-		const char *className = nullptr;
-		uint16_t tableId; //table类型唯一标识
 	};
 	enum class KeyType
 	{
@@ -100,8 +99,7 @@ namespace db {
 	{
 		std::string name;
 		uint16_t tableId; //table类型唯一标识
-		size_t pKeyOffset = 0; //主键指针偏移
-		std::unordered_map<std::string,Field> m_allField;
+		//std::unordered_map<std::string,Field> m_allField;
 		std::vector<Field> m_vecField; //根据定义先后顺序排放
 		TableFactorFun factor = nullptr;
 

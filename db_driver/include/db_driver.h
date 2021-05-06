@@ -56,29 +56,44 @@ namespace db {
 		bool Query(const db::BaseTable &data, uint32 limit_num=1);
 		bool Del(const db::BaseTable &data);
 		//注册查询回调函数
+		//DbTable 为 db::BaseTable的派生类
 		template<class DbTable>
 		void RegQueryCb(void (*fun)(bool, const DbTable& ) )
 		{
 			DbTable t;
+			if (m_id2QueryCb.find(t.TableId()) != m_id2QueryCb.end())
+			{
+				L_ERROR("repeated reg");
+				return;
+			}
 			m_id2QueryCb[t.TableId()] = (void *)fun;
 		}
-
 		template<class DbTable>
 			void RegInsertCb(void(*fun)(bool, const DbTable&))
 		{
 			DbTable t;
+			if (m_id2InertCb.find(t.TableId()) != m_id2InertCb.end())
+			{
+				L_ERROR("repeated reg");
+				return;
+			}
 			m_id2InertCb[t.TableId()] = (void *)fun;
 		}
 		template<class DbTable>
 		void RegDelCb(void(*fun)(bool, const DbTable&))
 		{
 			DbTable t;
+			if (m_id2InertCb.find(t.TableId()) != m_id2InertCb.end())
+			{
+				L_ERROR("repeated reg");
+				return;
+			}
 			m_id2InertCb[t.TableId()] = (void *)fun;
 		}
 
 	private:
 		//注册 proto消息回调
-		template<class MsgType> //Fun类型要求 void fun(const insert_sc &msg), 其中 insert_sc 可变
+		template<class MsgType> 
 		void RegProtoParse(void(*fun)(const MsgType &msg))
 		{
 			//typedef typename std::function<Fun>::argument_type MsgRefType;
@@ -97,7 +112,6 @@ namespace db {
 		//@len 表示 msg 有效长度
 		static void ParseInsert(const proto::insert_sc &msg);
 		static void ParseQuery(const proto::query_sc &msg);
-		static void ParseUpdate(const proto::update_sc &msg);
 		static void ParseDel(const proto::del_sc &msg);
 	};
 }

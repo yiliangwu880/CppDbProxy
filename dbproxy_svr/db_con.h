@@ -5,7 +5,7 @@
 #pragma once
 #include "base_include.h"
 
-using QueryResultRowCb = std::function<void(db::BaseTable &data)>;
+using QueryResultRowCb = std::function<void(const db::BaseTable &data)>;
 class InnerSvrCon;
 class IDbCon
 {

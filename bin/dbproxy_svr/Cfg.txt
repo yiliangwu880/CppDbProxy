@@ -9,11 +9,11 @@ select_db="mysql_db"
 
 //mysql db info
 mysql_db={
-	db_ip 	="192.168.1.243"
-	db_port =5306
-	db_user	="app"
+	db_ip 	="192.168.1.23"
+	db_port =3306
+	db_user	="root"
 	db_psw	="123456"
-	db_name ="only_test_db"
+	db_name ="testGame"
 }
 
 //mongodb info

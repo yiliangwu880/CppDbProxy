@@ -31,11 +31,11 @@ namespace proto {
 		uint32_t dataLen;
 		char data[0]; //没填值的字段不会更新
 	};
-	struct update_sc
-	{
-		const uint16_t id = 4;
-		bool ret;
-	};
+	//struct update_sc
+	//{
+	//	const uint16_t id = 4;
+	//	bool ret;
+	//};
 
 	struct query_cs
 	{
@@ -63,6 +63,8 @@ namespace proto {
 	{
 		const uint16_t id = 8;
 		bool ret;
+		uint32_t dataLen;
+		char data[0];//有值的内容作为条件
 	};
 }
 #pragma pack(pop)
