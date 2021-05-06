@@ -50,7 +50,7 @@ namespace db {
 
 	public:
 		Dbproxy();
-		void Init(const std::string &ip, uint16_t port, ConCb cb);
+		void Init(const std::string &ip, uint16_t port, ConCb cb=nullptr);
 		bool Insert(const db::BaseTable &data);
 		bool Update(const db::BaseTable &data);//更新数据，没填值的字段不会更新
 		bool Query(const db::BaseTable &data, uint32 limit_num=1);
@@ -78,13 +78,13 @@ namespace db {
 
 	private:
 		//注册 proto消息回调
-		template<class Fun> //Fun类型要求 void (const insert_sc *msg, uint32_t len);, 其中 insert_sc可变
-		void RegProtoParse(Fun fun)
+		template<class MsgType> //Fun类型要求 void fun(const insert_sc &msg), 其中 insert_sc 可变
+		void RegProtoParse(void(*fun)(const MsgType &msg))
 		{
-			typedef typename std::function<Fun>::argument_type MsgRefType;
-			typedef typename std::remove_reference<MsgRefType>::type MsgConstType;
-			typedef typename std::remove_const<MsgConstType>::type Type;
-			Type msg;
+			//typedef typename std::function<Fun>::argument_type MsgRefType;
+			//typedef typename std::remove_reference<MsgRefType>::type MsgConstType;
+			//typedef typename std::remove_const<MsgConstType>::type Type;
+			MsgType msg;
 			if (m_cmdId2Cb.find(msg.id) != m_cmdId2Cb.end())
 			{
 				L_ERROR("repeated reg");

@@ -38,10 +38,10 @@ namespace
 
 db::Dbproxy::Dbproxy()
 {
-	RegProtoParse<decltype(ParseInsert)>(ParseInsert);
-	RegProtoParse<decltype(ParseQuery)>(ParseQuery);
-	RegProtoParse<decltype(ParseUpdate)>(ParseUpdate);
-	RegProtoParse<decltype(ParseDel)>(ParseDel);
+	RegProtoParse(ParseInsert);
+	RegProtoParse(ParseQuery);
+	RegProtoParse(ParseUpdate);
+	RegProtoParse(ParseDel);
 }
 
 
@@ -54,20 +54,32 @@ void db::Dbproxy::Init(const std::string &ip, uint16_t port, ConCb cb)
 bool db::Dbproxy::Insert(const db::BaseTable &data)
 {
 	MsgPack msg;
-	insert_cs *p = BuildMsgPack<insert_cs>(msg, data);
+	auto p = BuildMsgPack<insert_cs>(msg, data);
 	L_COND(p, false);
 	return DbClientCon::Ins().SendData(msg);
 }
 
 bool db::Dbproxy::Update(const db::BaseTable &data)
 {
-	return false;
+	MsgPack msg;
+	auto p = BuildMsgPack<update_cs>(msg, data);
+	L_COND(p, false);
+	return DbClientCon::Ins().SendData(msg);
 }
 
 bool db::Dbproxy::Query(const db::BaseTable &data, uint32 limit_num/*=1*/)
 {
 	MsgPack msg;
-	query_cs *p = BuildMsgPack<query_cs>(msg, data);
+	auto p = BuildMsgPack<query_cs>(msg, data);
+	L_COND(p, false);
+	p->limit_num = limit_num;
+	return DbClientCon::Ins().SendData(msg);
+}
+
+bool db::Dbproxy::Del(const db::BaseTable &data)
+{
+	MsgPack msg;
+	auto p = BuildMsgPack<del_cs>(msg, data);
 	L_COND(p, false);
 	return DbClientCon::Ins().SendData(msg);
 }

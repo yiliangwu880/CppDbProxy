@@ -15,7 +15,7 @@ namespace db {
 	public:
 		friend class TableCfg;
 		BaseTable(const char *name, uint16_t id) : className(name), tableId(id){}
-
+		virtual ~BaseTable() {}; //必须要虚析构函数，才能让 unique_ptr<BaseTable> 正确释放。
 		uint16_t TableId() const { return tableId; }
 	private:
 		const char *className = nullptr;

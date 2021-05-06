@@ -238,8 +238,7 @@ void db::TableCfg::InitTableCfg()
 		L_ASSERT(string(t.className) == "PlayerTest"); //检查类名
 		size_t lastOffset = sizeof(BaseTable); //用来检查定义顺序是否和结构一致
 		table.factor = []() {
-			unique_ptr<BaseTable> p;
-			p.reset(new PlayerTest());
+			unique_ptr<BaseTable> p(new PlayerTest());
 			return p;
 		};
 		//field 1
@@ -282,8 +281,7 @@ void db::TableCfg::InitTableCfg()
 	L_ASSERT(string(t.className) == #def_name);\
 	size_t lastOffset = sizeof(BaseTable);\
 	table.factor = []() {\
-	unique_ptr<BaseTable> p;\
-	p.reset(new def_name());\
+	unique_ptr<BaseTable> p(new def_name());\
 	return p;\
 	};\
 

@@ -38,13 +38,13 @@ namespace
 
 	std::unordered_map<uint16_t, void *> m_cmdId2Cb; //proto 消息ID 2 回调
 
-	template<class Fun> //Fun类型要求 void (const insert_sc &msg, uint32_t len);, 其中 insert_sc可变
-	void RegProtoParse(Fun fun)
+	template<class MsgType> //Fun类型要求 void fun(const insert_sc &msg), 其中 insert_sc 可变
+	void RegProtoParse(void(*fun)(const MsgType &msg))
 	{
-		typedef typename std::function<Fun>::first_argument_type P1type;
-		typedef typename std::remove_reference<P1type>::type Type1;
-		typedef typename std::remove_const<Type1>::type Type;
-		Type msg;
+		//typedef typename std::function<void (const MsgType &msg)>::first_argument_type P1type;
+		//typedef typename std::remove_reference<P1type>::type Type1;
+		//typedef typename std::remove_const<Type1>::type Type;
+		MsgType msg;
 		if (m_cmdId2Cb.find(msg.id) != m_cmdId2Cb.end())
 		{
 			L_ERROR("repeated reg");
@@ -54,12 +54,12 @@ namespace
 	}
 
 
-	void ParseInsert(const MyMsg &msg, uint32_t len)
+	void ParseInsert(const MyMsg &msg)
 	{
 		UNIT_INFO("MyMsg ret=%d", msg.ret);
 
 	}
-	void ParseInsert2(const MyMsg2 &msg, uint32_t len)
+	void ParseInsert2(const MyMsg2 &msg)
 	{
 		UNIT_INFO("MyMsg2 b=%d", msg.b);
 
@@ -71,8 +71,8 @@ namespace
 
 UNITTEST(msgParse)
 {
-	RegProtoParse<decltype(ParseInsert)>(ParseInsert);
-	RegProtoParse<decltype(ParseInsert2)>(ParseInsert2);
+	RegProtoParse(ParseInsert);
+	RegProtoParse(ParseInsert2);
 	uint32_t len=33;
 	{
 		MyMsg msg;
