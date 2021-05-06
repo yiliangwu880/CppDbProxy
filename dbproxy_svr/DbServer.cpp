@@ -40,13 +40,20 @@ InnerSvrCon::InnerSvrCon()
 	RegProtoParse(ParseQuery);
 	RegProtoParse(ParseUpdate);
 	RegProtoParse(ParseDel);
+	RegProtoParse(ParseSql);
 }
 
 void InnerSvrCon::OnRecv(const MsgPack &msg)
 {
 	using ComFun = void(InnerSvrCon &con, const char &protoMsg); //消息回调函数， 抽象类型。 
 	uint16_t cmdId = *(const uint16_t *)msg.data; //约定协议前 uint16_t 为 cmdId.  
-	ComFun *fun = (ComFun *)(m_cmdId2Cb[cmdId]);
+	auto it = m_cmdId2Cb.find(cmdId);
+	if (it == m_cmdId2Cb.end())
+	{
+		L_ERROR("unknow cmdId %d", cmdId);
+		return;
+	}
+	ComFun *fun = (ComFun *)it->second;
 	(*fun)(*this, *(const char *)(msg.data));
 }
 
@@ -66,10 +73,6 @@ void InnerSvrCon::ParseInsert(InnerSvrCon &con, const proto::insert_cs &req)
 
 void InnerSvrCon::ParseQuery(InnerSvrCon &con, const proto::query_cs &req)
 {
-	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(req.data, req.dataLen);
-	L_COND_V(nullptr != pTable);
-	BaseTable &data = *pTable;
-
 	QueryResultRowCb cb = [&con](const db::BaseTable &data)
 	{
 		MsgPack msg;
@@ -78,13 +81,38 @@ void InnerSvrCon::ParseQuery(InnerSvrCon &con, const proto::query_cs &req)
 		rsp->ret = true;
 		con.SendData(msg);
 	};
-	if (!DbConMgr::Ins().GetCon().Query(data, req.limit_num, cb))
-	{//fail response
-		MsgPack msg;
-		query_sc *rsp = BuildMsgPack<query_sc>(msg, data);
-		L_COND_V(rsp);
-		rsp->ret = false;
-		con.SendData(msg);
+	if (req.isStr)
+	{
+		L_DEBUG("query by cond string, table_id= %d", req.table_id);
+		string cond(req.data, req.dataLen);
+		if (!DbConMgr::Ins().GetCon().Query(req.table_id, cond, req.limit_num, cb))
+		{//fail response
+			const Table *pTable = TableCfg::Ins().GetTable(req.table_id);
+			L_COND_V(pTable);
+			std::unique_ptr<BaseTable> pData =  pTable->factor();
+			BaseTable &data = *pData;
+
+			MsgPack msg;
+			query_sc *rsp = BuildMsgPack<query_sc>(msg, data);
+			L_COND_V(rsp);
+			rsp->ret = false;
+			con.SendData(msg);
+		}
+	}
+	else
+	{
+		std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(req.data, req.dataLen);
+		L_COND_V(nullptr != pTable);
+		BaseTable &data = *pTable;
+		L_DEBUG("query by db obj value");
+		if (!DbConMgr::Ins().GetCon().Query(data, req.limit_num, cb))
+		{//fail response
+			MsgPack msg;
+			query_sc *rsp = BuildMsgPack<query_sc>(msg, data);
+			L_COND_V(rsp);
+			rsp->ret = false;
+			con.SendData(msg);
+		}
 	}
 }
 
@@ -108,6 +136,17 @@ void InnerSvrCon::ParseDel(InnerSvrCon &con, const proto::del_cs &req)
 	del_sc *rsp = BuildMsgPack<del_sc>(msg, data);
 	L_COND_V(rsp);
 	rsp->ret = ret;
+	con.SendData(msg);
+}
+
+void InnerSvrCon::ParseSql(InnerSvrCon &con, const proto::excute_sql_cs &req)
+{
+	string sql(req.data, req.dataLen);
+	bool ret = DbConMgr::Ins().GetCon().ExecuteSql(sql);
+
+	MsgPack msg;
+	proto::excute_sql_sc *rsp = new (msg.data)proto::excute_sql_sc;	msg.len = sizeof(proto::excute_sql_sc);
+	rsp->sql_id = req.sql_id;
 	con.SendData(msg);
 }
 

@@ -17,8 +17,10 @@ public:
 	virtual bool InitTable() { return false; }; //创建表， 检查表是否非法
 	virtual bool Insert(const db::BaseTable &req) { return false; };
 	virtual bool Update(const db::BaseTable &req) { return false; };
-	virtual bool Query(const db::BaseTable &req, uint16_t limit_num, QueryResultRowCb cb) { return false; };
+	virtual bool Query(const db::BaseTable &req, uint32_t limit_num, QueryResultRowCb cb) { return false; };
+	virtual bool Query(uint16_t table_id, std::string &cond, uint32_t limit_num, QueryResultRowCb cb) { return false; };
 	virtual bool Del(const db::BaseTable &req) { return false; };
+	virtual bool ExecuteSql(const std::string &req) { return false; };
 
 };
 

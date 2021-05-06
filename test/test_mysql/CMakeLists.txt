@@ -20,6 +20,8 @@ file(GLOB_RECURSE SRCS3  ${PROJECT_SOURCE_DIR} "../com/*.cpp")
 SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin/${project_name})
 # 指定生成目标
 ADD_EXECUTABLE(${project_name} ${SRCS} ${SRCS2} ${SRCS3})
+#设置依赖
+ADD_DEPENDENCIES(${project_name} db_driver.a svr_util libcevent_cpp.a)
 
 # 设置链接库
 target_link_libraries(${project_name} db_driver.a svr_util libcevent_cpp.a )

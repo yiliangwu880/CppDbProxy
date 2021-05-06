@@ -35,6 +35,7 @@ namespace db {
 	class DbClientCon;
 
 	using ConCb = std::function<void()>;
+	using ExcuteSqlCb = std::function<void(uint32_t)>;
 
 	//db driver 接口
 	class Dbproxy: public Singleton<Dbproxy>
@@ -43,6 +44,7 @@ namespace db {
 
 	private:
 		ConCb m_conCb;
+		ExcuteSqlCb m_sqlCb;
 		std::unordered_map<uint16_t, void *> m_cmdId2Cb; //proto 消息ID 2 回调
 		std::unordered_map<uint16_t, void *> m_id2QueryCb; //tableID 2 查询回调
 		std::unordered_map<uint16_t, void *> m_id2InertCb;
@@ -50,11 +52,14 @@ namespace db {
 
 	public:
 		Dbproxy();
-		void Init(const std::string &ip, uint16_t port, ConCb cb=nullptr);
+		void Init(const std::string &ip, uint16_t port, ConCb cb=nullptr, ExcuteSqlCb SqlCb = nullptr);
 		bool Insert(const db::BaseTable &data);
 		bool Update(const db::BaseTable &data);//更新数据，没填值的字段不会更新
-		bool Query(const db::BaseTable &data, uint32 limit_num=1);
+		bool Query(const db::BaseTable &data, uint32 limit_num = 1);
+		//@data 用来识别类型用，值不读取
+		bool Query(const db::BaseTable &data, const std::string &cond, uint32 limit_num = 1);
 		bool Del(const db::BaseTable &data);
+		void ExecuteSql(const std::string &sql, uint32_t sql_id);
 		//注册查询回调函数
 		//DbTable 为 db::BaseTable的派生类
 		template<class DbTable>
@@ -83,12 +88,12 @@ namespace db {
 		void RegDelCb(void(*fun)(bool, const DbTable&))
 		{
 			DbTable t;
-			if (m_id2InertCb.find(t.TableId()) != m_id2InertCb.end())
+			if (m_id2DelCb.find(t.TableId()) != m_id2InertCb.end())
 			{
 				L_ERROR("repeated reg");
 				return;
 			}
-			m_id2InertCb[t.TableId()] = (void *)fun;
+			m_id2DelCb[t.TableId()] = (void *)fun;
 		}
 
 	private:
@@ -113,5 +118,6 @@ namespace db {
 		static void ParseInsert(const proto::insert_sc &msg);
 		static void ParseQuery(const proto::query_sc &msg);
 		static void ParseDel(const proto::del_sc &msg);
+		static void ParseExcuteSql(const proto::excute_sql_sc &msg);
 	};
 }

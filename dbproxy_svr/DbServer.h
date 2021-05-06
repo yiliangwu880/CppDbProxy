@@ -36,6 +36,7 @@ private:
 	static void ParseQuery(InnerSvrCon &con, const proto::query_cs &req);
 	static void ParseUpdate(InnerSvrCon &con, const proto::update_cs &req);
 	static void ParseDel(InnerSvrCon &con, const proto::del_cs &req);
+	static void ParseSql(InnerSvrCon &con, const proto::excute_sql_cs &req);
 };
 
 class DbServer : public lc::Listener<InnerSvrCon>, public Singleton<DbServer>

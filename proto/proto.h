@@ -37,11 +37,14 @@ namespace proto {
 	//	bool ret;
 	//};
 
+	
 	struct query_cs
 	{
 		const uint16_t id = 5;
-		uint16_t limit_num;
-		uint32_t dataLen;
+		uint32_t limit_num = 1;
+		bool isStr = false;		//true表示 data内容为 字符串条件，false表示 data内容为 任意类型db 对象, 序列化的结果
+		uint16_t table_id = 0; //isStr==true的时候用保存 BaseTable::TableId()
+		uint32_t dataLen = 0;
 		char data[0]; //有值的内容作为条件
 	};
 	//多行结果，分多次 query_sc 协议发送
@@ -50,7 +53,10 @@ namespace proto {
 		const uint16_t id = 6;
 		bool ret;
 		uint32_t dataLen;
-		char data[0]; //一个db 对象. 失败的情况， 返回请求的相同内容
+		//一个db 对象. 
+		//失败,isStr==false情况，  返回请求的相同内容. 
+		//失败,isStr==true的情况， 返回默认db obj,值都为0 or empty 
+		char data[0]; 
 	};
 
 	struct del_cs
@@ -65,6 +71,19 @@ namespace proto {
 		bool ret;
 		uint32_t dataLen;
 		char data[0];//有值的内容作为条件
+	};
+
+	struct excute_sql_cs
+	{
+		const uint16_t id = 9;
+		uint32_t sql_id;
+		uint32_t dataLen;
+		char data[0];//sql字符串
+	};
+	struct excute_sql_sc
+	{
+		const uint16_t id = 10;
+		uint32_t sql_id;
 	};
 }
 #pragma pack(pop)

@@ -74,7 +74,7 @@ namespace
 		return str;
 	}
 
-	void SetFieldParam(const db::BaseTable &data, const Field &field, sql::PreparedStatement &pstmt)
+	void SetFieldParam(const db::BaseTable &data, const Field &field, sql::PreparedStatement &pstmt, int idx)
 	{
 		uint8_t *pField = (uint8_t*)&data + field.pOffset;
 		switch (field.type)
@@ -83,33 +83,33 @@ namespace
 			L_ERROR("unknow type %d", (int)field.type);
 			break;
 		case FieldType::t_int32_t:
-			pstmt.setInt(field.idx, *(int32_t *)pField);
+			pstmt.setInt(idx, *(int32_t *)pField);
 			break;
 		case FieldType::t_uint32_t:
-			pstmt.setUInt(field.idx, *(uint32_t *)pField);
+			pstmt.setUInt(idx, *(uint32_t *)pField);
 			break;
 		case FieldType::t_int64_t:
-			pstmt.setInt64(field.idx, *(int64_t *)pField);
+			pstmt.setInt64(idx, *(int64_t *)pField);
 			break;
 		case FieldType::t_uint64_t:
-			pstmt.setUInt64(field.idx, *(uint64_t *)pField);
+			pstmt.setUInt64(idx, *(uint64_t *)pField);
 			break;
 		case FieldType::t_double:
-			pstmt.setDouble(field.idx, *(double *)pField);
+			pstmt.setDouble(idx, *(double *)pField);
 			break;
 		case FieldType::t_bool:
-			pstmt.setBoolean(field.idx, *(bool *)pField);
+			pstmt.setBoolean(idx, *(bool *)pField);
 			break;
 		case FieldType::t_string:
 		case FieldType::t_bytes:
-			pstmt.setString(field.idx, *(std::string *)pField);
+			pstmt.setString(idx, *(std::string *)pField);
 			break;
 		}
 	}
 
 }
 
-void MysqlCon::CreateSelectSql(const db::BaseTable &data, const string &table_name, uint16_t limit_num, string &sql_str)
+void MysqlCon::CreateSelectSql(const db::BaseTable &data, const string &table_name, uint32_t limit_num, string &sql_str)
 {
 	//SELECT t.*
 	//	FROM GameDB.players t
@@ -129,7 +129,25 @@ void MysqlCon::CreateSelectSql(const db::BaseTable &data, const string &table_na
 		sql_str += StrNum::NumToStr(limit_num);
 	}
 }
-
+void MysqlCon::CreateSelectSql(const std::string &cond, const string &table_name, uint32_t limit_num, string &sql_str)
+{
+	//SELECT t.*
+	//	FROM GameDB.players t
+	//	WHERE serverid = 201 and job = 1 and account = '1'
+	//	LIMIT 5
+	sql_str = "SELECT ";
+	sql_str += "* FROM ";
+	sql_str += table_name;
+	if (!cond.empty())
+	{
+		sql_str += " WHERE " + cond;
+	}
+	if (limit_num != 0)
+	{
+		sql_str += " limit ";
+		sql_str += StrNum::NumToStr(limit_num);
+	}
+}
 bool MysqlCon::InitTable()
 {
 	L_COND_F(m_con);
@@ -167,16 +185,17 @@ bool MysqlCon::Insert(const db::BaseTable &data)
 	L_COND_F(m_con);
 	const Table *table = TableCfg::Ins().GetTable(data.TableId());
 	L_COND_F(table);
-	//LOG_DEBUG("msg content=%s", msg->DebugString().c_str());
 	try {
 		string sql_str;
 		CreateInsertSql(data, sql_str);
 
-		//LOG_DEBUG("create insert sql=%s", sql_str.c_str());
+		L_DEBUG("create insert sql=%s", sql_str.c_str());
 		unique_ptr< sql::PreparedStatement > pstmt(m_con->prepareStatement(sql_str));
+		int idx = 1;
 		for (const Field &field : table->m_vecField)
 		{
-			SetFieldParam(data, field, *pstmt);
+			SetFieldParam(data, field, *pstmt, idx);
+			idx++;
 		}
 		int affect_row = pstmt->executeUpdate();
 		if (1 != affect_row)
@@ -206,6 +225,7 @@ bool MysqlCon::Update(const db::BaseTable &data)
 		}
 		L_DEBUG("create update sql=%s", sql_str.c_str());
 		unique_ptr< sql::PreparedStatement > pstmt(m_con->prepareStatement(sql_str));
+		int idx = 1;
 		for (const Field &field : table->m_vecField)
 		{
 			uint8_t *pField = (uint8_t*)&data + field.pOffset;
@@ -213,7 +233,8 @@ bool MysqlCon::Update(const db::BaseTable &data)
 			{
 				continue;
 			}
-			SetFieldParam(data, field, *pstmt);
+			SetFieldParam(data, field, *pstmt, idx);
+			idx++;
 		}
 		int affect_row = pstmt->executeUpdate();
 		if (1 != affect_row)
@@ -438,7 +459,7 @@ bool MysqlCon::CreateUpdateSql(const db::BaseTable &data, std::string &sql_str)
 	return true;
 }
 
-bool MysqlCon::Query(const db::BaseTable &data, uint16_t limit_num, QueryResultRowCb cb)
+bool MysqlCon::Query(const db::BaseTable &data, uint32_t limit_num, QueryResultRowCb cb)
 {
 	L_COND_F(m_con);
 	const Table *table = TableCfg::Ins().GetTable(data.TableId());
@@ -447,7 +468,7 @@ bool MysqlCon::Query(const db::BaseTable &data, uint16_t limit_num, QueryResultR
 	try {
 		string sql_str;
 		CreateSelectSql(data, table->name, limit_num, sql_str);
-//		L_DEBUG("select sql [%s]", sql_str.c_str());
+		L_DEBUG("select sql [%s]", sql_str.c_str());
 		unique_ptr< sql::Statement > stmt(m_con->createStatement());
 		stmt->execute(sql_str);
 
@@ -480,6 +501,60 @@ bool MysqlCon::Query(const db::BaseTable &data, uint16_t limit_num, QueryResultR
 				break;
 			}
 		} while(true);
+		return true;
+	}
+	catch (sql::SQLException &e) {
+		L_ERROR("%s, MySQL error code:%d, SQLState:%s", e.what(), e.getErrorCode(), e.getSQLStateCStr());
+		cb(data);
+		return false;
+	}
+}
+
+
+bool MysqlCon::Query(uint16_t table_id, std::string &cond, uint32_t limit_num, QueryResultRowCb cb)
+{
+	L_COND_F(m_con);
+	L_DEBUG("table_id=%d", table_id);
+	const Table *table = TableCfg::Ins().GetTable(table_id);
+	L_COND_F(table);
+	unique_ptr<BaseTable> defaultData = table->factor();
+	BaseTable &data = *defaultData;
+	try {
+		string sql_str;
+		CreateSelectSql(cond, table->name, limit_num, sql_str);
+		L_DEBUG("select sql [%s]", sql_str.c_str());
+		unique_ptr< sql::Statement > stmt(m_con->createStatement());
+		stmt->execute(sql_str);
+
+		int row_num = 0;
+		do
+		{
+			unique_ptr<sql::ResultSet> ret(stmt->getResultSet());
+			if (0 == row_num && nullptr == ret) //一个数据都没有
+			{
+				L_ERROR("execute sql fail [%s]", sql_str.c_str());
+				cb(data);
+				return false;
+			}
+			while (ret->next()) {
+				unique_ptr<db::BaseTable> pData = table->factor();
+				for (const Field &field : table->m_vecField)
+				{
+					if (!SetField(*pData, field, *ret))
+					{
+						L_ERROR("set field failed, filed_name[%s]", field.name.c_str());
+						return false;
+					}
+				}
+				cb(*pData);
+			}
+			row_num++;
+
+			if (!stmt->getMoreResults())
+			{
+				break;
+			}
+		} while (true);
 		return true;
 	}
 	catch (sql::SQLException &e) {
@@ -536,6 +611,22 @@ bool MysqlCon::Del(const db::BaseTable &data)
 		return false;
 	}
 }
+
+bool MysqlCon::ExecuteSql(const std::string &sql_str)
+{
+	L_COND_F(m_con);
+	try {
+		L_DEBUG("excute sql: %s", sql_str.c_str());
+		unique_ptr< sql::Statement > stmt(m_con->createStatement());
+		stmt->execute(sql_str);
+		return true;
+	}
+	catch (sql::SQLException &e) {
+		L_ERROR("%s, MySQL error code:%d, SQLState:%s", e.what(), e.getErrorCode(), e.getSQLStateCStr());
+		return false;
+	}
+}
+
 
 bool MysqlCon::CreateInsertSql(const db::BaseTable &data, std::string &sql_str)
 {

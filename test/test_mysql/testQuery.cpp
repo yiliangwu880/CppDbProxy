@@ -41,8 +41,8 @@ namespace
 	 void OnDiscon();
 
 	void Insert();
-	void OnRspInsert2(bool, const Player2 & data);
-	void OnRspInsert3(bool, const Player3 & data);
+	void OnRspInsert2(bool r, const Player2 & data) {};
+	void OnRspInsert3(bool r, const Player3 & data) {};
 	void OnQuery3(bool, const Player3 & data);
 	void OnDel3(bool, const Player3 & data);
 
@@ -61,84 +61,103 @@ namespace
 	void OnCon()
 	{
 		UNIT_INFO("onCon");
+	
+		Insert();
+	}
+
+	int g_query_cnt = 0;
+	void Insert()
+	{
 		UNIT_INFO("Insert");
 		m_state = WAIT_INSERT;
 		{
-			Player2 data;
-			data.id2 = 1;
-			data.myblob = "a";
-			data.myblob2 = "a看到了";
-			Dbproxy::Ins().Insert(data);
-		}
-		{
 			Player3 data;
 			data.id = 1;
-			data.id2 = 1;
+			data.id2 = data.id;
 			data.myblob2 = "中文";
+			Dbproxy::Ins().Insert(data);
+			data.id = 2;
+			data.id2 = data.id;
+			Dbproxy::Ins().Insert(data);
+			data.id = 3;
+			data.id2 = data.id;
+			Dbproxy::Ins().Insert(data);
+			data.id = 4;
+			data.id2 = data.id;
 			Dbproxy::Ins().Insert(data);
 		}
 		{
 			Player4 data;
-			data.name = "a";
-			data.idx = "中文";
+			data.name = "1";
 			Dbproxy::Ins().Insert(data);
+			data.name = "2";
+			Dbproxy::Ins().Insert(data);
+			data.name = "3";
+			Dbproxy::Ins().Insert(data);	
 		}
-	}
-
-
-
-
-	void OnRspInsert2(bool is_ok, const Player2 & data)
-	{
-		UNIT_ASSERT(WAIT_INSERT == m_state);
-		UNIT_ASSERT(is_ok);
-	}
-	void OnRspInsert3(bool is_ok, const Player3 & data)
-	{
-		UNIT_INFO("OnRspInsert3");
-		UNIT_ASSERT(WAIT_INSERT == m_state);
-		UNIT_ASSERT(is_ok);
-		UNIT_ASSERT(data.id2 == 1);
-		UNIT_ASSERT(data.myblob1.empty());
-		UNIT_ASSERT(data.myblob2 == "中文");
-
-		UNIT_INFO("start updte");
-		m_state = WAIT_UPDATE;
-
+		//start query
 		{
 			Player3 data;
-			data.id = 1;
-			data.id2 = 1;
-			data.myblob2 = "中文2";
-			Dbproxy::Ins().Update(data);
-		}
-		{
-			Player3 data;
-			data.id = 1;
-			Dbproxy::Ins().Query(data);
+			Dbproxy::Ins().Query(data, 100);
+			g_query_cnt=1;
 		}
 	}
 
+	int g_run_cnt = 0;
+	lc::Timer tm;
 	void OnQuery3(bool ret, const Player3 & data)
 	{
-		UNIT_ASSERT(ret);
-
-		UNIT_ASSERT(data.id2 == 1);
-		UNIT_ASSERT(data.myblob1.empty());
-		UNIT_ASSERT(data.myblob2 == "中文2");
+		if (g_query_cnt == 1)
 		{
-			Player3 data;
-			data.id = 1;
-			data.myblob2 = "ab";
-			Dbproxy::Ins().Del(data);
+			UNIT_ASSERT(ret);
+
+			g_run_cnt++;
+			if (g_run_cnt == 4 )
+			{
+				auto f = []()
+				{
+					UNIT_ASSERT(g_run_cnt == 4);
+					UNIT_INFO("g_query_cnt = 2")
+					Player3 data;
+					data.id = 1;
+					Dbproxy::Ins().Query(data, 100);
+					g_query_cnt = 2;
+					g_run_cnt = 0;
+				};
+				L_INFO("start timer g_query_cnt == 1");
+				tm.StartTimerSec(2, f);
+			}
+		}
+		else if (2 == g_query_cnt)
+		{
+			UNIT_ASSERT(g_query_cnt == 2);
+			UNIT_ASSERT(ret);
+			UNIT_ASSERT(data.id == 1);
+			UNIT_ASSERT(data.id2 == 1);
+
+			auto f = []()
+			{
+				Player3 data;
+				Dbproxy::Ins().Query(data, "id > 2", 100);
+				g_query_cnt = 3; 
+				g_run_cnt = 0;
+			};
+			L_INFO("start timer g_query_cnt == 2");
+			tm.StartTimerSec(2, f);
+		}
+		else if (3 == g_query_cnt)
+		{
+			g_run_cnt++;
+			UNIT_ASSERT(ret);
+			UNIT_ASSERT(data.id == 3 || data.id == 4);
+			UNIT_INFO("3 == g_query_cnt data.id=%d", data.id);
 		}
 	}
-
 
 
 	void OnDel3(bool ret, const Player3 & data)
 	{
-		UNIT_ASSERT(data.id==1);
+		UNIT_ASSERT(g_run_cnt ==4);
 		UNIT_ASSERT(ret);
 		UNIT_INFO("OnDel3")
 	}
@@ -150,11 +169,11 @@ namespace
 
 }
 
-UNITTEST(test_mysql)
+UNITTEST(test_query)
 {
 	UNIT_ASSERT(CfgMgr::Ins().Init());
 
-	//Start();
+	Start();
 
 	EventMgr::Ins().Dispatch();
 	UNIT_INFO("--------------------test_mysql end--------------------");

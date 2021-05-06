@@ -157,10 +157,6 @@ std::unique_ptr<db::BaseTable> db::TableCfg::Unpack(const char *cur, size_t len)
 	SetValue(tableId);
 	uint8_t field_num;
 	SetValue(field_num);
-	if (0 == field_num)
-	{
-		return nullptr;
-	}
 
 	static uint8_t fieldIdx[std::numeric_limits<uint8_t>::max()];
 	for (int i = 0; i < field_num; i++)
