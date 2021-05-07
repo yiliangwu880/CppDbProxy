@@ -2,7 +2,7 @@
 ip="127.0.0.1"
 port=55121
 
-is_daemon = 0
+is_daemon = 1
 
 //mysql_db 或者 mongodb_db
 select_db="mysql_db"

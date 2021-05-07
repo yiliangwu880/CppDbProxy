@@ -59,7 +59,7 @@ namespace db {
 		//@data 用来识别类型用，值不读取
 		bool Query(const db::BaseTable &data, const std::string &cond, uint32 limit_num = 1);
 		bool Del(const db::BaseTable &data);
-		void ExecuteSql(const std::string &sql, uint32_t sql_id);
+		void ExecuteSql(const std::string &sql, uint32_t sql_id=0);
 		//注册查询回调函数
 		//DbTable 为 db::BaseTable的派生类
 		template<class DbTable>

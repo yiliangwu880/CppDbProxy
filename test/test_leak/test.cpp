@@ -9,6 +9,7 @@
 #include "svr_util/include/single_progress.h"
 #include "svr_util/include/read_cfg.h"
 #include "svr_util/include/su_rand.h"
+#include "svr_util/include/str_util.h"
 #include "unit_test.h"
 #include "../db_driver/include/db_driver.h"
 #include "../com/cfg.h"
@@ -21,248 +22,150 @@ using namespace lc;
 
 namespace
 {
-	class DbMgr : public db::BaseDbproxy
+	enum State
 	{
-	public:
-		enum State
-		{
-			WAIT_CONNECT,
-			WAIT_DROP_TABLE, //删除上次测试的table
-			WAIT_INIT_TALBE,
+		WAIT_CONNECT,
+		WAIT_DROP_TABLE, //删除上次测试的table
+		WAIT_INIT_TALBE,
 
-			WAIT_RANDOM_END,
-		};
-		State m_state;
-		TestTable m_msg;
-		SubMsg m_sub;
-		TTT3 m_t;
-		TTT2 m_t2;
-		TTT1 m_t1;
-		lc::Timer m_tm; //random handle timer
-	public:
-		DbMgr();
-
-		void Start();
-		void StartInitTable();
-		void RandomReq();
-
-		virtual void OnCon();
-		virtual void OnDiscon();
-		virtual void OnRspInitTable(bool is_ok);
-		virtual void OnRspInsert(const db::RspInsertData &rsp);
-		virtual void OnRspUpdate(const db::RspUpdateData &rsp);
-		virtual void OnRspGet(const db::RspGetData &rsp);
-		virtual void OnRspDel(const db::RspDelData &rsp);
-		virtual void OnRspSql(bool is_ok);
+		WAIT_RANDOM_END,
 	};
+	State m_state;
+	lc::Timer m_tm; //random handle timer
+	void OnCon() {};
 
+	void OnRspInsert2(bool, const Player2 & data) {};
+	void OnRspInsert3(bool, const Player3 & data) {};
+	void OnQuery3(bool, const Player3 & data) {};
+	void OnDel3(bool, const Player3 & data) {};
+	void RandomReq();
 
-
-
-	DbMgr::DbMgr()
-	{
-
-		m_msg.set_id(1);
-		m_msg.set_name_32(1);
-		m_msg.set_name_str("a");
-		m_msg.set_name_enum(T1);
-		m_msg.set_name_bool(true);
-		m_msg.set_name_bytes("a", 1);
-
-		m_sub.set_id(1);
-		m_sub.set_name_enum(T1);
-		m_sub.set_name_bool(true);
-
-		m_t.set_id(1);
-		m_t.set_name("abc");
-		m_t.mutable_sub_msg()->CopyFrom(m_sub);
-		m_t.set_t23("a");
-
-		m_t1.set_id(2);
-		m_t1.set_t23("ab");
-
-		m_t2.set_id("ab");
-		m_t2.set_t(3);
-	}
-
-
-	void DbMgr::Start()
+	void Start()
 	{
 		m_state = WAIT_CONNECT;
 		UNIT_INFO("connect %s %d", CfgMgr::Ins().dbproxy_svr_ip.c_str(), CfgMgr::Ins().dbproxy_svr_port);
-		Connect(CfgMgr::Ins().dbproxy_svr_ip, CfgMgr::Ins().dbproxy_svr_port);
-	}
+		Dbproxy::Ins().Init(CfgMgr::Ins().dbproxy_svr_ip, CfgMgr::Ins().dbproxy_svr_port, OnCon);
+		Dbproxy::Ins().RegInsertCb(OnRspInsert2);
+		Dbproxy::Ins().RegInsertCb(OnRspInsert3);
+		Dbproxy::Ins().RegQueryCb(OnQuery3);
+		Dbproxy::Ins().RegDelCb(OnDel3);
 
-
-	void DbMgr::StartInitTable()
-	{
-		m_state = WAIT_INIT_TALBE;
-		ReqInitTable req;
-		//TestTable a;
-		req.add_msg_name("TestTable");
-		req.add_msg_name("TTT1");
-		req.add_msg_name("TTT2");
-		req.add_msg_name("TTT3");
-		InitTable(req);
-	}
-
-
-	void DbMgr::OnCon()
-	{
-		UNIT_ASSERT(m_state == WAIT_CONNECT);
-		m_state = WAIT_DROP_TABLE;
-		ExecuteSql("DROP TABLE TTT3");
-		ExecuteSql("DROP TABLE TestTable");
-	}
-
-
-	void DbMgr::OnDiscon()
-	{
-		UNIT_INFO("OnDiscon");
-	}
-
-
-	void DbMgr::OnRspInitTable(bool is_ok)
-	{
-		UNIT_ASSERT(WAIT_INIT_TALBE == m_state);
+		UNIT_INFO("start timer");
 
 		m_state = WAIT_RANDOM_END;
-		UNIT_INFO("start timer");
-		m_tm.StartTimer(5, std::bind(&DbMgr::RandomReq, this), true);
+		m_tm.StartTimer(5, RandomReq, true);
+
 	}
 
-	void DbMgr::RandomReq()
+	void RandomReq()
 	{
 		//UNIT_INFO("r");
-		uint32 r = Random::RandUint32(0, 14);
+		uint32 r = Random::RandUint32(0, 13);
 		switch (r)
 		{
-		case 14:
+		case 9:
 		{
-			Insert(m_t1);
+			Player2 d;
+			d.id2 = Random::RandUint32(0, 14);
+			Dbproxy::Ins().Insert(d);
 		}
 		break;
 		case 13:
 		{
-			Insert(m_t2);
+			Player4 d;
+			d.name = StrNum::NumToStr( Random::RandUint32(0, 14));
+			Dbproxy::Ins().Insert(d);
 		}
 		break;
 		case 12:
 		{
-			Update(m_t1);
+			Player2 d;
+			d.id2 = Random::RandUint32(0, 14);
+			d.myblob2= StrNum::NumToStr(Random::RandUint32(0, 14));
+			Dbproxy::Ins().Update(d);
 		}
 		break;
 		case 11:
-		{
-			Update(m_t2);
-		}
-		break;
 		case 10:
 		{
-			Update(m_t);
+			Player4 d;
+			d.name = StrNum::NumToStr(Random::RandUint32(0, 14));
+			d.idx = StrNum::NumToStr(Random::RandUint32(0, 14));
+			Dbproxy::Ins().Update(d);
 		}
 		break;
 		case 0:
-		{
-			Insert(m_msg);
-		}
-		break;
 		case 1:
 		{
-			Insert(m_t);
+			Player3 d;
+			d.id = Random::RandUint32(0, 14);
+			Dbproxy::Ins().Insert(d);
 		}
 		break;
 		case 2:
 		{
-			Get<TestTable>("id=1");
+			Player3 d;
+			d.id = Random::RandUint32(0, 14);
+			Dbproxy::Ins().Query(d);
 
 		}
 		break;
 		case 3:
 		{
-			Get<TTT3>("name='abc'");
-
+			Player4 d;
+			d.name = StrNum::NumToStr(Random::RandUint32(0, 14));
+			Dbproxy::Ins().Query(d);
 		}
 		break;
 		case 4:
 		{
-			Del<TestTable>(1);
-
+			Player4 d;
+			d.name = StrNum::NumToStr(Random::RandUint32(0, 14));
+			Dbproxy::Ins().Del(d);
 		}
 		break;
 		case 5:
 		{
-			Del<TTT3>("abc");
+			Player2 d;
+			d.id2 = Random::RandUint32(0, 14);
+			Dbproxy::Ins().Del(d);
 
 		}
 		break;
 		case 6:
 		{
-			Get<TestTable>("id=2");
+			Player2 d;
+			d.id2 = Random::RandUint32(0, 14);
+			Dbproxy::Ins().Query(d, "id2 > 3 ");
 
 		}
 		break;
 		case 7:
 		{
-			ExecuteSql("INSERT INTO `TestTable` VALUES ('2', null, '11', null, null, null, null, null)");
+			Dbproxy::Ins().ExecuteSql("INSERT INTO `TestTable` VALUES ('2', null, '11', null, null, null, null, null)");
 
 		}
 		break;
 		case 8:
 		{
-
-			ExecuteSql("delete from TestTable where id=2");
-		}
-		break;
-		case 9:
-		{
-			Update(m_msg);
+			Dbproxy::Ins().ExecuteSql("delete from TestTable where id=2");
 		}
 		break;
 		default:
-			UNIT_ASSERT(false);
 			break;
 		}
 	}
 
 
-	void DbMgr::OnRspInsert(const db::RspInsertData &rsp)
-	{
-	}
-
-
-	void DbMgr::OnRspUpdate(const db::RspUpdateData &rsp)
-	{
-
-	}
-
-	void DbMgr::OnRspGet(const db::RspGetData &rsp)
-	{
-
-	}
-
-	void DbMgr::OnRspDel(const db::RspDelData &rsp)
-	{
-
-	}
-
-	void DbMgr::OnRspSql(bool is_ok)
-	{
-		if (WAIT_DROP_TABLE == m_state)
-		{
-			StartInitTable();
-		}
-	}
 }
 
 UNITTEST(test_leak)
 {
 	UNIT_ASSERT(CfgMgr::Ins().Init());
 	SuMgr::Ins().Init();
-	EventMgr::Ins().Init();
-
-	DbMgr db;
-	db.Start();
+	string ss;
+	ss = 3;
+	Start();
 
 	EventMgr::Ins().Dispatch();
 	UNIT_INFO("--------------------test_leak end--------------------");
