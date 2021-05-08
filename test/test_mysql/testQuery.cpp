@@ -84,6 +84,11 @@ namespace
 			Dbproxy::Ins().Insert(data);
 			data.id = 4;
 			data.id2 = data.id;
+			data.ride2.id = 1;
+			data.ride2.id2 = 2;
+			data.ride2.sub.id = 1;
+			data.ride2.sub.ids.push_back(1);
+			data.ride2.sub.ids.push_back(2);
 			Dbproxy::Ins().Insert(data);
 		}
 		{
@@ -151,6 +156,16 @@ namespace
 			UNIT_ASSERT(ret);
 			UNIT_ASSERT(data.id == 3 || data.id == 4);
 			UNIT_INFO("3 == g_query_cnt data.id=%d", data.id);
+			if (data.id == 4)
+			{
+				UNIT_INFO("check data.ride2 ok")
+				UNIT_ASSERT(data.ride2.id == 1);
+				UNIT_ASSERT(data.ride2.id2 == 2);
+				UNIT_ASSERT(data.ride2.sub.id == 1);
+				UNIT_ASSERT(data.ride2.sub.ids[0] == 1);
+				UNIT_ASSERT(data.ride2.sub.ids[1] == 2);
+				UNIT_ASSERT(data.ride2.sub.ids.size() == 2);
+			}
 		}
 	}
 
@@ -159,7 +174,7 @@ namespace
 	{
 		UNIT_ASSERT(g_run_cnt ==4);
 		UNIT_ASSERT(ret);
-		UNIT_INFO("OnDel3")
+		UNIT_INFO("OnDel3, test end ---------")
 	}
 
 	void OnDiscon()
@@ -175,7 +190,6 @@ UNITTEST(test_query)
 
 	Start();
 
-	EventMgr::Ins().Dispatch();
 	UNIT_INFO("--------------------test_mysql end--------------------");
 
 }

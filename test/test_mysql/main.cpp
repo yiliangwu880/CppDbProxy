@@ -12,6 +12,7 @@ using namespace lc;
 int main(int argc, char* argv[])
 {
 	UnitTestMgr::Ins().Start();
+	EventMgr::Ins().Dispatch();
 	return 0;
 }
 

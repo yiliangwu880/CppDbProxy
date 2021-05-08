@@ -5,6 +5,7 @@
 #include <set>
 #include <limits>
 #include <string.h>
+#include "dbStructPack.h"
 
 using namespace std;
 using namespace db;
@@ -20,32 +21,10 @@ TableCfg::TableCfg()
 {
 	InitTableCfg();
 	CheckMissField();
+	CheckStructField();
 }
 
-//bool db::TableCfg::GetFieldPoint(const BaseTable &obj, const std::string &fieldName, FieldInfo &fieldInfo)
-//{
-//	auto it = m_allTable.find(obj.TableId());
-//	if (it == m_allTable.end())
-//	{
-//		L_ERROR("obj is not db table");
-//		return false;
-//	}
-//	Table &table = it->second;
-//
-//	auto it_field = table.m_allField.find(fieldName);
-//	if (it_field == table.m_allField.end())
-//	{
-//		L_ERROR("fieldName is error %s", fieldName.c_str());
-//		return false;
-//	}
-//	Field &field = it_field->second;
-//
-//	fieldInfo.fieldPoint = (void *)(((uint8_t *)(&obj) + (int64_t)field.pOffset));
-//	fieldInfo.type = field.type;
-//	return true;
-//}
-
-bool db::TableCfg::Pack(const BaseTable &obj, char *str, size_t &len)
+bool db::TableCfg::Pack(const BaseTable &obj, char *cur, size_t &packLen)
 {
 	//打包格式：
 	//uint16_t tableid，
@@ -55,16 +34,9 @@ bool db::TableCfg::Pack(const BaseTable &obj, char *str, size_t &len)
 	//value 如果是string结构, 内存格式： {uint32_t len, char *str}
 	//uint8_t endFlag; --标识结尾 tableid+field_num ，截取一个字节。 目的：更严格的检查，降低随机错误检查不出来的概率
 
-	//本来考虑模板，但模板做不到那么简洁 “SetValue(v)”
-#define  SetValue(v)\
-	L_COND(remainLen > sizeof(v), false);\
-	*(decltype(v)*)cur = v;\
-	cur += sizeof(v);\
-	remainLen -= sizeof(v);\
+#define  SetValue(v) db::Pack(v, cur, len)
 
-	char *cur = str; //当前些指针
-	size_t remainLen = len; //剩余空间
-
+	size_t len= packLen;
 	SetValue(obj.TableId());
 
 	auto it = m_allTable.find(obj.TableId());
@@ -92,6 +64,11 @@ bool db::TableCfg::Pack(const BaseTable &obj, char *str, size_t &len)
 				field_num++;
 			}
 		}
+		else if (field.type == FieldType::t_struct)
+		{
+			fieldIdx[field_num] = idx;
+			field_num++;
+		}
 		else
 		{
 			static uint64_t zero = uint64_t();
@@ -105,52 +82,31 @@ bool db::TableCfg::Pack(const BaseTable &obj, char *str, size_t &len)
 	}
 
 	SetValue(field_num);
-	L_COND(remainLen > field_num, false);
+
+	L_COND(len > field_num, false);
 	memcpy(cur, fieldIdx, field_num);
 	cur += field_num;
-	remainLen -= field_num;
-
+	len -= field_num;
+	//L_DEBUG("field_num = %d", field_num);
 	//init value1, value2, ...
 	for (int i=0; i< field_num; ++i)
 	{
 		int idx = fieldIdx[i];
 		const Field &field = table.m_vecField[idx];
-		uint8_t *pField = (uint8_t*)&obj + field.pOffset;
-		if (field.type == FieldType::t_bytes || field.type == FieldType::t_string)
-		{
-			std::string *pStr = (std::string *)pField;
-			SetValue(pStr->length());
-
-			L_COND(remainLen > pStr->length(), false);
-			memcpy(cur, pStr->c_str(), pStr->length());
-			cur += pStr->length();
-			remainLen -= pStr->length();
-		}
-		else
-		{
-			L_COND(remainLen > field.fieldSize, false);
-			memcpy(cur, pField, field.fieldSize);
-			cur += field.fieldSize;
-			remainLen -= field.fieldSize;
-		}
+		char *pField = (char*)&obj + field.pOffset;
+		field.packFun(*pField, cur, len);
 	}
 	uint8_t endFlag = field_num + (uint8_t)obj.TableId();
 	SetValue(endFlag);
-	len = len - remainLen;
+	packLen = packLen - len;
 	return true;
 #undef SetValue
 }
 
 std::unique_ptr<db::BaseTable> db::TableCfg::Unpack(const char *cur, size_t len)
 {
-#define  SetValue(v)\
-	L_COND(remainLen >= sizeof(v), nullptr);\
-	v = *(const decltype(v)*)cur;\
-	cur += sizeof(v);\
-	remainLen -= sizeof(v);\
-
 	L_COND(cur, nullptr);
-	size_t remainLen = len; //剩余空间
+#define  SetValue(v) db::Unpack(v, cur, len)
 
 
 	uint16_t tableId;
@@ -173,31 +129,13 @@ std::unique_ptr<db::BaseTable> db::TableCfg::Unpack(const char *cur, size_t len)
 	}
 	const Table &table = it->second;
 	unique_ptr<BaseTable> p = table.factor();
-
 	for (int i = 0; i < field_num; ++i)
 	{
 		int idx = fieldIdx[i];
 		const Field &field = table.m_vecField[idx];
-		uint8_t *pField = (uint8_t*)(p.get()) + field.pOffset;
-		if (field.type == FieldType::t_bytes || field.type == FieldType::t_string)
-		{
-			std::string *pStr = (std::string *)pField;
-			size_t len;
-			SetValue(len);
-			L_COND(len > 0, nullptr);
+		char *pField = (char*)(p.get()) + field.pOffset;
 
-			L_COND(remainLen >= len, nullptr);
-			pStr->assign(cur, len);
-			cur += len;
-			remainLen -= len;
-		}
-		else
-		{
-			L_COND(remainLen >= field.fieldSize, nullptr);
-			memcpy(pField, cur, field.fieldSize);
-			cur += field.fieldSize;
-			remainLen -= field.fieldSize;
-		}
+		field.unpackFun(*pField, cur, len);
 	}
 	uint8_t endFlag;
 	SetValue(endFlag);
@@ -230,7 +168,7 @@ void db::TableCfg::InitTableCfg()
 		Table &table = m_allTable[t.TableId()];
 		table.name = t.className;
 		table.tableId = t.TableId();
-		L_ASSERT(m_tableIds.insert(table.tableId).first);
+		L_ASSERT(m_tableIds.insert(table.tableId).second);
 		L_ASSERT(0 == &(((decltype(t) *)(nullptr))->className));//检查className 必须定义第一行
 		L_ASSERT(string(t.className) == "PlayerTest"); //检查类名
 		size_t lastOffset = sizeof(BaseTable); //用来检查定义顺序是否和结构一致
@@ -254,6 +192,8 @@ void db::TableCfg::InitTableCfg()
 			lastOffset = field.pOffset;
 
 			field.keyType = KeyType::MAIN;
+			field.packFun = (PackFun)db::Pack<decltype(t.id)>;
+			field.unpackFun = (UnpackFun)db::Unpack<decltype(t.id)>;
 			table.m_vecField.push_back(field);
 		}
 		//field 2
@@ -296,6 +236,8 @@ void db::TableCfg::InitTableCfg()
 	}\
 	L_ASSERT(lastOffset <= field.pOffset);\
 	lastOffset = field.pOffset;\
+	field.packFun = (PackFun)db::Pack<decltype(t.fieldName)>;\
+	field.unpackFun = (UnpackFun)db::Unpack<decltype(t.fieldName)>;\
 	table.m_vecField.push_back(field);\
 	}\
 
@@ -315,6 +257,8 @@ void db::TableCfg::InitTableCfg()
 	L_ASSERT(lastOffset <= field.pOffset);\
 	lastOffset = field.pOffset;\
 	field.keyType = KeyType::MAIN;\
+	field.packFun = (PackFun)db::Pack<decltype(t.fieldName)>;\
+	field.unpackFun = (UnpackFun)db::Unpack<decltype(t.fieldName)>;\
 	table.m_vecField.push_back(field);\
 	}\
 
@@ -334,6 +278,8 @@ void db::TableCfg::InitTableCfg()
 	L_ASSERT(lastOffset <= field.pOffset);\
 	lastOffset = field.pOffset;\
 	field.keyType = KeyType::INDEX;\
+	field.packFun = (PackFun)db::Pack<decltype(t.fieldName)>;\
+	field.unpackFun = (UnpackFun)db::Unpack<decltype(t.fieldName)>;\
 	table.m_vecField.push_back(field);\
 	}\
 
@@ -405,6 +351,86 @@ void db::TableCfg::CheckMissField()
 #undef  DB_INDEX_KEY
 #undef  DB_FIELD
 #undef  DB_CLASS_END
+}
+
+void db::TableCfg::CheckStructField()
+{
+#if 0
+	struct Check_Ride
+	{
+		using CheckType = Ride;
+		decltype(CheckType::id) id;
+		decltype(CheckType::ids) ids;
+	};
+	L_ASSERT(sizeof(Check_Ride) == sizeof(Check_Ride::CheckType)); //确保域宏定义完整
+
+		//宏实现的代码模板
+	{
+		Ride t;
+		size_t lastOffset = 0; //用来检查定义顺序是否和结构一致
+		//field 1
+		{
+			size_t offset = (size_t)&(((decltype(t) *)(nullptr))->id);
+			L_ASSERT(lastOffset <= offset); //field定义顺序和执行不一致
+			lastOffset = offset;
+		}
+		//field 2
+		//。。。。。
+	}
+#endif
+	//
+
+#define DB_CLASS_NAME(className) \
+	struct Check_##className \
+	{\
+		using CheckType = className;\
+
+#define DB_FIELD(fieldName)	\
+		decltype(CheckType::fieldName) fieldName;\
+
+#define DB_CLASS_END\
+	};\
+
+	DB_ALL_STRUCT_INFO
+
+#undef  DB_CLASS_NAME
+#undef  DB_FIELD
+#undef  DB_CLASS_END
+
+#define DB_CLASS_NAME(className) \
+	L_ASSERT(sizeof(Check_##className) == sizeof(Check_##className::CheckType));\
+
+#define DB_FIELD(fieldName)	
+#define DB_CLASS_END
+
+		DB_ALL_STRUCT_INFO
+
+#undef  DB_CLASS_NAME
+#undef  DB_FIELD
+#undef  DB_CLASS_END
+
+
+#define DB_CLASS_NAME(className) \
+	{\
+		className t;\
+		size_t lastOffset = 0; \
+
+#define DB_FIELD(fieldName)	\
+	{\
+		size_t offset = (size_t)&(((decltype(t) *)(nullptr))->fieldName);\
+		L_ASSERT(lastOffset <= offset); \
+		lastOffset = offset;\
+	}\
+
+#define DB_CLASS_END\
+	}\
+
+		DB_ALL_STRUCT_INFO
+
+#undef  DB_CLASS_NAME
+#undef  DB_FIELD
+#undef  DB_CLASS_END
+
 }
 
 const db::Field * db::Table::GetMainKey() const

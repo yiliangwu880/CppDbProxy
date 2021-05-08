@@ -36,6 +36,7 @@ namespace db {
 		t_double,
 		t_string,
 		t_bytes ,
+		t_struct, //任意struct 结构
 	};
 	//用户接口当string用，这里定义为了区分db 的 string 和 bytes
 	struct Bytes : public  std::string
@@ -46,7 +47,7 @@ namespace db {
 	template<typename T>
 	struct FieldTypeTraits
 	{
-		static const FieldType type = FieldType::t_uint32_t;
+		static const FieldType type = FieldType::t_struct;
 	};
 
 	template<>struct FieldTypeTraits<std::string> { static const FieldType type = FieldType::t_string; };
@@ -85,6 +86,11 @@ namespace db {
 #undef EASY_CODE
 
 	using TableFactorFun = std::function< std::unique_ptr<BaseTable> () >;
+
+	using PointChar = char*;
+	using CPointChar = const char*;
+	using PackFun = bool(*)(const char &t, PointChar &str, size_t &len); //t 是具体类型的抽象
+	using UnpackFun = bool(*)(char &t, CPointChar &cur, size_t &len);
 	struct Field
 	{
 		std::string name;
@@ -93,6 +99,26 @@ namespace db {
 		size_t pOffset = 0; //成员指针偏移
 		size_t fieldSize = 0;//域的 sizeof
 		int idx = 0;//定义先后索引，0开始
+		PackFun packFun = nullptr;//非基础类型的域，需要独特的打包 解包 函数
+		UnpackFun unpackFun = nullptr;
+		//间接调用 packFun,提供std::string接口
+		inline void Pack(const db::BaseTable &data, std::string &str) const
+		{
+			const char *pField = (char*)&data + pOffset;
+			size_t len = 1024 * 2;
+			str.resize(len);
+			char *cur = (char *)str.c_str();
+			packFun(*pField, cur, len);
+			len = str.length() - len;
+			str.resize(len);
+		}
+		inline void Unpack(db::BaseTable &data, const std::string &str) const
+		{
+			char *pField = (char*)&data + pOffset;
+			const char *cur = str.c_str();
+			size_t len = str.length();
+			unpackFun(*pField, cur, len);
+		}
 	};
 
 	struct Table
@@ -105,11 +131,7 @@ namespace db {
 
 		const Field *GetMainKey() const;
 	};
-	struct FieldInfo
-	{
-		void *fieldPoint=nullptr; //域变量的真正指针
-		FieldType type= FieldType::t_uint32_t;
-	};
+
 	class TableCfg
 	{
 		std::unordered_map<uint16_t, Table> m_allTable;
@@ -121,8 +143,7 @@ namespace db {
 		}
 		TableCfg();
 
-		//bool GetFieldPoint(const BaseTable &obj, const std::string &fieldName, FieldInfo &fieldInfo);
-
+		//@len [in] str 内存长度， [out] str 打包的有效长度
 		bool Pack(const BaseTable &obj, char *str, size_t &len);
 		std::unique_ptr<BaseTable> Unpack(const char *str, size_t len);
 		const Table *GetTable(uint16_t tableId) const;
@@ -130,6 +151,6 @@ namespace db {
 	private:
 		void InitTableCfg();
 		void CheckMissField();
-
+		void CheckStructField();
 	};
 }

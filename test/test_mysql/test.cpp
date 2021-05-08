@@ -110,6 +110,11 @@ namespace
 			data.id = 1;
 			data.id2 = 1;
 			data.myblob2 = "中文2";
+			data.ride2.id = 1;
+			data.ride2.id2 = 2;
+			data.ride2.sub.id = 1;
+			data.ride2.sub.ids.push_back(1);
+			data.ride2.sub.ids.push_back(2);
 			Dbproxy::Ins().Update(data);
 		}
 		{
@@ -122,10 +127,20 @@ namespace
 	void OnQuery3(bool ret, const Player3 & data)
 	{
 		UNIT_ASSERT(ret);
-
+		UNIT_INFO("data.id=%d", data.id);
+		UNIT_INFO("data.id2=%d", data.id2);
 		UNIT_ASSERT(data.id2 == 1);
 		UNIT_ASSERT(data.myblob1.empty());
 		UNIT_ASSERT(data.myblob2 == "中文2");
+
+
+		UNIT_ASSERT(data.ride2.id == 1);
+		UNIT_ASSERT(data.ride2.id2 == 2);
+		UNIT_ASSERT(data.ride2.sub.id == 1);
+		UNIT_ASSERT(data.ride2.sub.ids[0] == 1);
+		UNIT_ASSERT(data.ride2.sub.ids[1] == 2);
+		UNIT_ASSERT(data.ride2.sub.ids.size() == 2);
+
 		{
 			Player3 data;
 			data.id = 1;
@@ -140,7 +155,7 @@ namespace
 	{
 		UNIT_ASSERT(data.id==1);
 		UNIT_ASSERT(ret);
-		UNIT_INFO("OnDel3")
+		UNIT_INFO("--------OnDel3, test end---------")
 	}
 
 	void OnDiscon()
@@ -152,11 +167,11 @@ namespace
 
 UNITTEST(test_mysql)
 {
+	return;
 	UNIT_ASSERT(CfgMgr::Ins().Init());
 
-	//Start();
+	Start();
 
-	EventMgr::Ins().Dispatch();
 	UNIT_INFO("--------------------test_mysql end--------------------");
 
 }

@@ -28,9 +28,21 @@ UNITTEST(testPack)
 		player.id = 5;
 		char ar[1024];
 		size_t len = ArrayLen(ar);
+		//{
+
+		//	UNIT_INFO("player player.id = %p %p", &player, &player.id);
+		//	string out((char *)&player, 30);
+		//	UNIT_INFO("player binary =  %s", StrUtil::BinaryToHex(out).c_str());
+		//}
 		bool r = TableCfg::Ins().Pack(player, ar, len);
 		UNIT_ASSERT(r);
-		string out(ar, len);
+
+		//{
+		//	UNIT_INFO("len = %d", len);
+		//	string out(ar, len);
+		//	UNIT_INFO("ar = %p %s", ar, StrUtil::BinaryToHex(out).c_str());
+		//}
+
 		unique_ptr<BaseTable> p = TableCfg::Ins().Unpack(ar, len);
 		UNIT_ASSERT(p != nullptr);
 		Player3 &unpackPlayer = *(Player3 *)(p.get());
@@ -53,7 +65,7 @@ UNITTEST(testPack)
 		bool r = TableCfg::Ins().Pack(player, ar, len);
 		UNIT_ASSERT(r);
 		//UNIT_INFO("len = %d", len);
-		string out(ar, len);
+		//string out(ar, len);
 		//UNIT_INFO("ar = %s", StrUtil::BinaryToHex(out).c_str());
 		
 		unique_ptr<BaseTable> p = TableCfg::Ins().Unpack(ar, len);
@@ -174,5 +186,155 @@ UNITTEST(testPack)
 		UNIT_ASSERT(unpackPlayer.idx == "123");
 	
 	}
+	//测试嵌套结构体
+	{ 
+		UNIT_INFO("start-----------------\n\n")
+		char ar[1024];
+		size_t len = ArrayLen(ar);
+
+		Player3 player;
+		player.id = 5;
+		player.ride.id = 0x3f00fffe;
+		player.ride.ids.push_back(1);
+		player.ride.ids.push_back(2);
+
+		bool r = TableCfg::Ins().Pack(player, ar, len);
+		UNIT_ASSERT(r);
+
+		//{
+		//	UNIT_INFO("len = %d", len);
+		//	string out(ar, len);
+		//	UNIT_INFO("ar = %p %s", ar, StrUtil::BinaryToHex(out).c_str());
+		//}
+
+		unique_ptr<BaseTable> p = TableCfg::Ins().Unpack(ar, len);
+		UNIT_ASSERT(p != nullptr);
+		Player3 &unpackPlayer = *(Player3 *)(p.get());
+		UNIT_ASSERT(unpackPlayer.id == player.id);
+		UNIT_ASSERT(unpackPlayer.ride.id == player.ride.id);
+		//UNIT_INFO("ids.size %d", unpackPlayer.ride.ids.size());
+		UNIT_ASSERT(unpackPlayer.ride.ids.size() == player.ride.ids.size());
+		UNIT_ASSERT(unpackPlayer.ride.ids.size() == 2);
+
+		UNIT_ASSERT(unpackPlayer.ride.ids[0] == 1);
+		UNIT_ASSERT(unpackPlayer.ride.ids[1] == 2);
+	}
+	{ 
+		char ar[1024];
+		size_t len = ArrayLen(ar);
+
+		Player3 player;
+		player.id = 0xff00ff00ee00ffff;
+		player.id1 = 3;
+		player.ride.id = 0x3f00fffe;
+		player.ride.ids.push_back(1);
+		player.ride.ids.push_back(2);
+
+		bool r = TableCfg::Ins().Pack(player, ar, len);
+		UNIT_ASSERT(r);
+
+		//{
+		//	UNIT_INFO("len = %d", len);
+		//	string out(ar, len);
+		//	UNIT_INFO("ar = %p %s", ar, StrUtil::BinaryToHex(out).c_str());
+		//}
+
+		unique_ptr<BaseTable> p = TableCfg::Ins().Unpack(ar, len);
+		UNIT_ASSERT(p != nullptr);
+		Player3 &unpackPlayer = *(Player3 *)(p.get());
+		UNIT_ASSERT(unpackPlayer.id == player.id);
+		UNIT_ASSERT(unpackPlayer.id1 == player.id1);
+		UNIT_ASSERT(unpackPlayer.id2 == 0);
+		UNIT_ASSERT(unpackPlayer.id3 == 0);
+		UNIT_ASSERT(unpackPlayer.myblob1.empty());
+		UNIT_ASSERT(unpackPlayer.myblob2.empty());
+		UNIT_ASSERT(unpackPlayer.ride.id == player.ride.id);
+		//UNIT_INFO("ids.size %d", unpackPlayer.ride.ids.size());
+		UNIT_ASSERT(unpackPlayer.ride.ids.size() == player.ride.ids.size());
+		UNIT_ASSERT(unpackPlayer.ride.ids.size() == 2);
+
+		UNIT_ASSERT(unpackPlayer.ride.ids[0] == 1);
+		UNIT_ASSERT(unpackPlayer.ride.ids[1] == 2);
+
+	}
+	{//多层嵌套
+			char ar[1024];
+		size_t len = ArrayLen(ar);
+
+		Player3 player;
+		player.id = 5;
+		player.ride.id = 0x3f00fffe;
+		player.ride.ids.push_back(1);
+		player.ride.ids.push_back(2);
+
+		player.ride2.id = 3;
+		player.ride2.isOk = true;
+		player.ride2.sub.id = 0x3f00fffe;
+		player.ride2.sub.ids.push_back(1);
+		player.ride2.sub.ids.push_back(2);
+
+		bool r = TableCfg::Ins().Pack(player, ar, len);
+		UNIT_ASSERT(r);
+		UNIT_ASSERT(len < 100);//100大约写，不会太多
+		{
+			//UNIT_INFO("len = %d", len);
+		//	string out(ar, len);
+		//	UNIT_INFO("ar = %p %s", ar, StrUtil::BinaryToHex(out).c_str());
+		}
+
+		unique_ptr<BaseTable> p = TableCfg::Ins().Unpack(ar, len);
+		UNIT_ASSERT(p != nullptr);
+		Player3 &uPlayer = *(Player3 *)(p.get());
+		UNIT_ASSERT(uPlayer.id == player.id);
+		UNIT_ASSERT(uPlayer.ride.id == player.ride.id);
+		//UNIT_INFO("ids.size %d", uPlayer.ride.ids.size());
+		UNIT_ASSERT(uPlayer.ride.ids.size() == player.ride.ids.size());
+		UNIT_ASSERT(uPlayer.ride.ids.size() == 2);
+		UNIT_ASSERT(uPlayer.ride.ids[0] == 1);
+		UNIT_ASSERT(uPlayer.ride.ids[1] == 2);
+
+		UNIT_ASSERT(uPlayer.ride2.id == player.ride2.id);
+		UNIT_ASSERT(uPlayer.ride2.isOk == player.ride2.isOk);
+		UNIT_ASSERT(uPlayer.ride2.sub.id == player.ride2.sub.id);
+		UNIT_ASSERT(uPlayer.ride2.sub.ids.size() == 2);
+		UNIT_ASSERT(uPlayer.ride2.sub.ids[0] == 1);
+		UNIT_ASSERT(uPlayer.ride2.sub.ids[1] == 2);
+	}
+	{// 测试 Field::Pack
+		char ar[1024];
+		size_t len = ArrayLen(ar);
+
+		Player3 player;
+		player.id = 5;
+		player.ride.id = 0x3f00fffe;
+		player.ride.ids.push_back(1);
+		player.ride.ids.push_back(2);
+
+		player.ride2.id = 3;
+		player.ride2.isOk = true;
+		player.ride2.sub.id = 0x3f00fffe;
+		player.ride2.sub.ids.push_back(1);
+		player.ride2.sub.ids.push_back(2);
+
+
+		const Table *pTable = TableCfg::Ins().GetTable(player.TableId());
+		const Field &field = pTable->m_vecField[7]; //ride2 field
+		UNIT_ASSERT(field.name == "ride2");
+		string str;
+		field.Pack(player, str);
+		UNIT_INFO("%d", str.length());
+		UNIT_ASSERT(str.length() < 100);//100大约写，不会太多
+
+		Player3 uPlayer;
+		field.Unpack(uPlayer, str);
+
+		UNIT_ASSERT(uPlayer.ride2.id == player.ride2.id);
+		UNIT_ASSERT(uPlayer.ride2.isOk == player.ride2.isOk);
+		UNIT_ASSERT(uPlayer.ride2.sub.id == player.ride2.sub.id);
+		UNIT_ASSERT(uPlayer.ride2.sub.ids.size() == 2);
+		UNIT_ASSERT(uPlayer.ride2.sub.ids[0] == 1);
+		UNIT_ASSERT(uPlayer.ride2.sub.ids[1] == 2);
+	}
+
 }
 

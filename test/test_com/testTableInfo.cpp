@@ -13,6 +13,7 @@ brief: use example and test code
 #include "db_driver/include/db_driver.h"
 #include "external/svr_util/include/easy_code.h"
 #include "external/svr_util/include/str_util.h"
+#include "proto/dbStructPack.h"
 
 using namespace std;
 using namespace lc;
@@ -35,12 +36,14 @@ UNITTEST(testTableInfo)
 		UNIT_ASSERT(f.keyType == KeyType::MAIN);
 		UNIT_ASSERT(f.pOffset == sizeof(BaseTable));
 		UNIT_ASSERT(f.fieldSize == sizeof(Player2::id2));
+		UNIT_ASSERT(f.packFun == (db::PackFun)db::Pack<uint64_t>);
+		UNIT_ASSERT(f.unpackFun == (db::UnpackFun)db::Unpack<uint64_t>);
 	}
 
 	//check Player3
 	{
 		const Table &table = *(TableCfg::Ins().GetTable(3));
-		UNIT_ASSERT(table.m_vecField.size() == 6);
+		UNIT_ASSERT(table.m_vecField.size() == 8);
 		{
 			const Field f = table.m_vecField[0];
 			UNIT_ASSERT(f.name == "id");
@@ -72,6 +75,8 @@ UNITTEST(testTableInfo)
 			UNIT_ASSERT(f.type == FieldType::t_bytes);
 			UNIT_ASSERT(f.keyType == KeyType::NONE);
 			UNIT_ASSERT(f.fieldSize == 0);
+			UNIT_ASSERT(f.packFun == (db::PackFun)db::Pack<Bytes>);
+			UNIT_ASSERT(f.unpackFun == (db::UnpackFun)db::Unpack<Bytes>);
 		}
 		{
 			const Field f = table.m_vecField[4];
@@ -79,6 +84,8 @@ UNITTEST(testTableInfo)
 			UNIT_ASSERT(f.type == FieldType::t_uint32_t);
 			UNIT_ASSERT(f.keyType == KeyType::NONE);
 			UNIT_ASSERT(f.fieldSize == sizeof(Player3::id3));
+			UNIT_ASSERT(f.packFun == (db::PackFun)db::Pack<uint32_t>);
+			UNIT_ASSERT(f.unpackFun == (db::UnpackFun)db::Unpack<uint32_t>);
 		} 
 		{
 			const Field f = table.m_vecField[5];

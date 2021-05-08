@@ -43,8 +43,8 @@ namespace
 		typename std::function<Fun>::second_argument_type t1 = 231; //ok
 		typename std::function<Fun>::result_type *p=nullptr;
 
-		UNIT_INFO("t2 %d %d", t2, sizeof(t2))
-		UNIT_INFO("para3");
+		//UNIT_INFO("t2 %d %d", t2, sizeof(t2))
+		//UNIT_INFO("para3");
 	}
 }
 

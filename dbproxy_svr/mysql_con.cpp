@@ -35,6 +35,10 @@ namespace
 					continue;
 				}
 			}
+			else if (field.type == FieldType::t_struct)
+			{
+				continue;
+			}
 			else
 			{
 				static uint64_t zero = uint64_t();
@@ -76,7 +80,7 @@ namespace
 
 	void SetFieldParam(const db::BaseTable &data, const Field &field, sql::PreparedStatement &pstmt, int idx)
 	{
-		uint8_t *pField = (uint8_t*)&data + field.pOffset;
+		char *pField = (char*)&data + field.pOffset;
 		switch (field.type)
 		{
 		default:
@@ -103,6 +107,11 @@ namespace
 		case FieldType::t_string:
 		case FieldType::t_bytes:
 			pstmt.setString(idx, *(std::string *)pField);
+			break;
+		case FieldType::t_struct:
+			std::string str;
+			field.Pack(data, str);
+			pstmt.setString(idx, str);
 			break;
 		}
 	}
@@ -365,6 +374,7 @@ bool MysqlCon::SetField(BaseTable &data, const Field &field, const sql::ResultSe
 			break;
 		case FieldType::t_uint64_t:
 			*(uint64_t *)pField = res.getUInt64(field.name);
+			//L_DEBUG("table id,name %d %s v=%ld", data.TableId(), field.name.c_str(), *(uint64_t *)pField);
 			break;
 		case FieldType::t_bool:
 			*(bool *)pField = res.getBoolean(field.name);
@@ -373,6 +383,7 @@ bool MysqlCon::SetField(BaseTable &data, const Field &field, const sql::ResultSe
 			*(string *)pField = res.getString(field.name).asStdString();
 			break;
 		case FieldType::t_bytes:
+		{
 			unique_ptr<std::istream> inStream(res.getBlob(field.name));
 			if (nullptr == inStream)
 			{
@@ -381,6 +392,20 @@ bool MysqlCon::SetField(BaseTable &data, const Field &field, const sql::ResultSe
 			}
 			string &str = *(string *)pField;
 			str.assign(std::istreambuf_iterator<char>{*inStream}, std::istreambuf_iterator<char>{});
+		}
+			break;
+		case FieldType::t_struct:
+		{
+			unique_ptr<std::istream> inStream(res.getBlob(field.name));
+			if (nullptr == inStream)
+			{
+				L_ERROR("res.getBlob() fail field.name()=%s", field.name.c_str());
+				return false;
+			}
+			std::string str;
+			str.assign(std::istreambuf_iterator<char>{*inStream}, std::istreambuf_iterator<char>{});
+			field.Unpack(data, str);
+		}
 			break;
 		}
 	}
@@ -479,7 +504,6 @@ bool MysqlCon::Query(const db::BaseTable &data, uint32_t limit_num, QueryResultR
 			if (0 == row_num && nullptr == ret) //一个数据都没有
 			{
 				L_ERROR("execute sql fail [%s]", sql_str.c_str());
-				cb(data);
 				return false;
 			}
 			while (ret->next()) {
@@ -505,7 +529,6 @@ bool MysqlCon::Query(const db::BaseTable &data, uint32_t limit_num, QueryResultR
 	}
 	catch (sql::SQLException &e) {
 		L_ERROR("%s, MySQL error code:%d, SQLState:%s", e.what(), e.getErrorCode(), e.getSQLStateCStr());
-		cb(data);
 		return false;
 	}
 }
@@ -533,7 +556,6 @@ bool MysqlCon::Query(uint16_t table_id, std::string &cond, uint32_t limit_num, Q
 			if (0 == row_num && nullptr == ret) //一个数据都没有
 			{
 				L_ERROR("execute sql fail [%s]", sql_str.c_str());
-				cb(data);
 				return false;
 			}
 			while (ret->next()) {
@@ -559,7 +581,6 @@ bool MysqlCon::Query(uint16_t table_id, std::string &cond, uint32_t limit_num, Q
 	}
 	catch (sql::SQLException &e) {
 		L_ERROR("%s, MySQL error code:%d, SQLState:%s", e.what(), e.getErrorCode(), e.getSQLStateCStr());
-		cb(data);
 		return false;
 	}
 }
@@ -696,6 +717,9 @@ std::string MysqlCon::GetCreateTypeStr(db::FieldType t, bool is_unique)
 		s = "varchar(255) CHARACTER SET utf8 COLLATE utf8_general_ci";
 		break;
 	case FieldType::t_bytes:
+		s = "blob NULL";
+		break;
+	case FieldType::t_struct:
 		s = "blob NULL";
 		break;
 	}

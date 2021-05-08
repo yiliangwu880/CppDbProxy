@@ -7,6 +7,7 @@ db table 定义，同时定义 c++对象类型
 #include <string>
 #include <vector>
 #include "dbTable.h"
+#include "dbStructDef.h"
 
 namespace db
 {
@@ -26,6 +27,7 @@ namespace db
 		std::string myblob;
 		std::string myblob2;
 	};
+
 	struct Player3 : public BaseTable
 	{
 		Player3() : BaseTable("Player3", 3) {}
@@ -36,6 +38,8 @@ namespace db
 		Bytes myblob1;
 		uint32_t id3   =0;
 		std::string myblob2;
+		Ride ride;
+		Ride2 ride2;
 	};
 	struct Player4 : public BaseTable
 	{
@@ -43,7 +47,9 @@ namespace db
 		std::string name;
 		std::string idx;
 	};
-	//抽象
+
+//先定义宏参数信息，以后再具体实现
+//域的顺序 和 遗漏，都会初始化的时候检查出来
 #define DB_ALL_TABLE_INFO \
 	DB_CLASS_NAME(Player2)\
 	DB_MAIN_KEY(id2)\
@@ -58,6 +64,8 @@ namespace db
 	DB_FIELD(myblob1)\
 	DB_FIELD(id3)\
 	DB_FIELD(myblob2)\
+	DB_FIELD(ride)\
+	DB_FIELD(ride2)\
 	DB_CLASS_END\
 \
 	DB_CLASS_NAME(Player4)\
@@ -80,6 +88,7 @@ namespace db
 #undef  DB_INDEX_KEY
 #undef  DB_FIELD
 #undef  DB_CLASS_END
+
 
 
 }

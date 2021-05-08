@@ -56,12 +56,12 @@ namespace
 
 	void ParseInsert(const MyMsg &msg)
 	{
-		UNIT_INFO("MyMsg ret=%d", msg.ret);
+		//UNIT_INFO("MyMsg ret=%d", msg.ret);
 
 	}
 	void ParseInsert2(const MyMsg2 &msg)
 	{
-		UNIT_INFO("MyMsg2 b=%d", msg.b);
+		//UNIT_INFO("MyMsg2 b=%d", msg.b);
 
 	}
 }
