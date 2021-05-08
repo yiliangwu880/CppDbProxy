@@ -44,6 +44,7 @@ namespace
 	void OnRspInsert2(bool, const Player2 & data);
 	void OnRspInsert3(bool, const Player3 & data);
 	void OnQuery3(bool, const Player3 & data);
+	void OnQuery2(bool, const Player2 & data);
 	void OnDel3(bool, const Player3 & data);
 
 	void Start()
@@ -54,6 +55,7 @@ namespace
 		Dbproxy::Ins().RegInsertCb(OnRspInsert2);
 		Dbproxy::Ins().RegInsertCb(OnRspInsert3);
 		Dbproxy::Ins().RegQueryCb(OnQuery3);
+		Dbproxy::Ins().RegQueryCb(OnQuery2);
 		Dbproxy::Ins().RegDelCb(OnDel3);
 
 	}
@@ -68,7 +70,21 @@ namespace
 			data.id2 = 1;
 			data.myblob = "a";
 			data.myblob2 = "a看到了";
+			data.ride.id = 1;
+			data.ride.name = "abc";
+			Ride ride;
+			ride.id = 1;
+			ride.ids.push_back(11);
+			data.ride.rides.push_back(ride);
+			data.vec8.push_back(1);
+
+			//map
+			data.m1[1] = 1;
+			ride.id = 32;
+			data.m2[32] = ride;
+
 			Dbproxy::Ins().Insert(data);
+
 		}
 		{
 			Player3 data;
@@ -155,9 +171,47 @@ namespace
 	{
 		UNIT_ASSERT(data.id==1);
 		UNIT_ASSERT(ret);
-		UNIT_INFO("--------OnDel3, test end---------")
+
+		{
+			Player2 data;
+			data.id2 = 1;
+			Dbproxy::Ins().Query(data);
+		}
+		UNIT_INFO("OnDel3")
 	}
 
+	void OnQuery2(bool ret, const Player2 & data)
+	{
+		UNIT_ASSERT(ret);
+		UNIT_ASSERT(data.id2 == 1);
+		UNIT_ASSERT(data.myblob == "a");
+		UNIT_ASSERT(data.myblob2 == "a看到了");
+
+
+		UNIT_ASSERT(data.ride.id == 1);
+		UNIT_ASSERT(data.ride.name == "abc");
+		UNIT_ASSERT(data.ride.rides.size() == 1);
+		UNIT_ASSERT(data.ride.rides[0].id == 1);
+		UNIT_ASSERT(data.ride.rides[0].ids.size() == 1);
+		UNIT_ASSERT(data.ride.rides[0].ids[0] == 11);
+		UNIT_ASSERT(data.vec8[0] == 1);
+		UNIT_ASSERT(data.vec8.size() == 1);
+		
+		//map
+		decltype(data.m1) m1 = data.m1;
+		decltype(data.m2) m2 = data.m2;
+		UNIT_ASSERT(m1.size() == 1);
+		UNIT_ASSERT(m1[1] == 1);
+		UNIT_ASSERT(m2.size() == 1);
+		UNIT_ASSERT(m2[32].id == 32);
+		Ride &ride = m2[32];
+
+		UNIT_ASSERT(ride.id == 32);
+		UNIT_ASSERT(ride.ids.size() == 1);
+		UNIT_ASSERT(ride.ids[0] == 11);
+
+		UNIT_INFO("OnQuery2， ------test end ----------");
+	}
 	void OnDiscon()
 	{
 		UNIT_INFO("OnDiscon");
@@ -167,11 +221,10 @@ namespace
 
 UNITTEST(test_mysql)
 {
-	return;
+	//return;
 	UNIT_ASSERT(CfgMgr::Ins().Init());
 
 	Start();
 
-	UNIT_INFO("--------------------test_mysql end--------------------");
 
 }

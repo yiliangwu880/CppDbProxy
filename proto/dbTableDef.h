@@ -1,5 +1,7 @@
 /*
-db table 定义，同时定义 c++对象类型
+db table 定义
+unordered_map 比较少用，新曾的需要定义对应类型的 packMap，UnpackMap 函数
+
 */
 
 #pragma once
@@ -26,6 +28,10 @@ namespace db
 		uint64_t id2;
 		std::string myblob;
 		std::string myblob2;
+		Player2Ride ride;
+		std::vector<uint8_t> vec8;
+		std::unordered_map<uint32_t, uint64_t> m1;
+		std::unordered_map<uint32_t, Ride> m2;
 	};
 
 	struct Player3 : public BaseTable
@@ -55,6 +61,10 @@ namespace db
 	DB_MAIN_KEY(id2)\
 	DB_FIELD(myblob)\
 	DB_FIELD(myblob2)\
+	DB_FIELD(ride)\
+	DB_FIELD(vec8)\
+	DB_FIELD(m1)\
+	DB_FIELD(m2)\
 	DB_CLASS_END\
 \
 	DB_CLASS_NAME(Player3)\

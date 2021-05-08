@@ -29,7 +29,7 @@ UNITTEST(testTableInfo)
 	//check Player2
 	{
 		const Table &table = *(TableCfg::Ins().GetTable(2));
-		UNIT_ASSERT(table.m_vecField.size() == 3);
+		UNIT_ASSERT(table.m_vecField.size() == 7);
 		const Field f = table.m_vecField[0];
 		UNIT_ASSERT(f.name == "id2");
 		UNIT_ASSERT(f.type == FieldType::t_uint64_t);

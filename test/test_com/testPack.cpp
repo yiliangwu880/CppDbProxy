@@ -336,5 +336,45 @@ UNITTEST(testPack)
 		UNIT_ASSERT(uPlayer.ride2.sub.ids[1] == 2);
 	}
 
+	{// 测试 vector<struct>
+		char ar[1024];
+		size_t len = ArrayLen(ar);
+
+		Player2 player;
+		player.id2 = 5;
+		player.ride.id = 0x3f00fffe;
+		{
+			Ride ride;
+			ride.id = 1;
+			ride.ids.push_back(1);
+			ride.ids.push_back(2);
+			player.ride.rides.push_back(ride);
+		}
+		player.vec8.push_back(201);
+		player.vec8.push_back(202);
+
+		bool r = TableCfg::Ins().Pack(player, ar, len);
+		UNIT_ASSERT(r);
+		UNIT_ASSERT(len < 100);//100大约写，不会太多
+		{
+			//UNIT_INFO("len = %d", len);
+		//	string out(ar, len);
+		//	UNIT_INFO("ar = %p %s", ar, StrUtil::BinaryToHex(out).c_str());
+		}
+		unique_ptr<BaseTable> p = TableCfg::Ins().Unpack(ar, len);
+		Player2 &uPlayer = *(Player2 *)(p.get());
+
+		UNIT_ASSERT(uPlayer.id2 == player.id2);
+		UNIT_ASSERT(uPlayer.ride.id == player.ride.id);
+		UNIT_ASSERT(uPlayer.ride.rides.size() == player.ride.rides.size());
+		UNIT_ASSERT(uPlayer.ride.rides[0].ids[0] == 1);
+		UNIT_ASSERT(uPlayer.ride.rides[0].ids[1] == 2);
+
+
+		UNIT_ASSERT(uPlayer.vec8.size() == player.vec8.size());
+		UNIT_ASSERT(uPlayer.vec8[0] == 201);
+		UNIT_ASSERT(uPlayer.vec8[1] == 202);
+	}
+
 }
 

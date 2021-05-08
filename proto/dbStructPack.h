@@ -1,6 +1,4 @@
-/*
-db table 定义，同时定义 c++对象类型
-*/
+
 
 #pragma once
 
@@ -172,6 +170,36 @@ namespace db
 		return true;
 	}
 
+	template<class Map>
+	inline bool PackMap(const Map &v, PointChar &cur, size_t &len)
+	{
+		uint32_t cntLen = v.size();
+		L_COND(Pack(cntLen, cur, len), false);
+		for (const auto &vt : v)
+		{
+			L_COND(Pack(vt.first, cur, len), false);
+			L_COND(Pack(vt.second, cur, len), false);
+		}
+		return true;
+	}
+
+	template<class Map>
+	inline bool UnpackMap(Map &v, CPointChar &cur, size_t &len)
+	{
+		uint32_t cntLen;
+		L_COND(Unpack(cntLen, cur, len), false);
+		for (uint32_t i = 0; i < cntLen; i++)
+		{
+			typename Map::key_type k;
+			typename Map::mapped_type value;
+			L_COND(Unpack(k, cur, len), false);
+			L_COND(Unpack(value, cur, len), false);
+			v.insert(std::make_pair(k,value));
+		}
+		return true;
+	}
+#if 1
+	///////////////////////vector////////////////////////////
 	//定义所有vector<xx>
 #define EASY_CODE(T)\
 	template<>\
@@ -195,9 +223,63 @@ namespace db
 		EASY_CODE(int8_t)
 		EASY_CODE(uint8_t)
 
+			//任意vector<struct>
+#define DB_CLASS_NAME(className) EASY_CODE(className)
+#define DB_FIELD(fieldName)
+#define DB_CLASS_END
+
+		DB_ALL_STRUCT_INFO
+
+#undef  DB_CLASS_NAME
+#undef  DB_FIELD
+#undef  DB_CLASS_END
+
 #undef  EASY_CODE
 
+#endif
+#if 1
+///////////////////////unordered_map////////////////////////////
+			//定义所有unordered_map<xx>
+#define EASY_CODE(K,T)\
+	template<>\
+	inline bool Pack<std::unordered_map<K,T>>(const std::unordered_map<K,T> &v, PointChar &cur, size_t &len)\
+	{\
+		return PackMap(v, cur, len);\
+	}\
+	template<>\
+	inline bool Unpack<std::unordered_map<K,T>>(std::unordered_map<K,T> &v, CPointChar &cur, size_t &len)\
+	{\
+		return UnpackMap(v, cur, len);\
+	}\
 
+			//实际情况少量使用，需要再扩展
+			EASY_CODE(uint32_t, uint32_t)
+			EASY_CODE(uint32_t, uint64_t)
+			EASY_CODE(uint64_t, uint64_t)
+
+#define DB_CLASS_NAME(className) EASY_CODE(uint64_t, className)
+#define DB_FIELD(fieldName)
+#define DB_CLASS_END
+
+			DB_ALL_STRUCT_INFO
+
+#undef  DB_CLASS_NAME
+#undef  DB_FIELD
+#undef  DB_CLASS_END
+
+#define DB_CLASS_NAME(className) EASY_CODE(uint32_t, className)
+#define DB_FIELD(fieldName)
+#define DB_CLASS_END
+
+			DB_ALL_STRUCT_INFO
+
+#undef  DB_CLASS_NAME
+#undef  DB_FIELD
+#undef  DB_CLASS_END
+
+#undef  EASY_CODE
+
+#endif
 ///////////////////////自定义结构体////////////////////////////
 #if 0
 	//宏代码模板
