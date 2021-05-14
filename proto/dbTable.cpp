@@ -166,11 +166,9 @@ void db::TableCfg::InitTableCfg()
 		int idx = 0;
 		PlayerTest t;//用来推算类名字
 		Table &table = m_allTable[t.TableId()];
-		table.name = t.className;
+		table.name = "PlayerTest";
 		table.tableId = t.TableId();
 		L_ASSERT(m_tableIds.insert(table.tableId).second);
-		L_ASSERT(0 == &(((decltype(t) *)(nullptr))->className));//检查className 必须定义第一行
-		L_ASSERT(string(t.className) == "PlayerTest"); //检查类名
 		size_t lastOffset = sizeof(BaseTable); //用来检查定义顺序是否和结构一致
 		table.factor = []() {
 			unique_ptr<BaseTable> p(new PlayerTest());
@@ -210,11 +208,9 @@ void db::TableCfg::InitTableCfg()
 	int idx = 0;\
 	def_name t;\
 	Table &table = m_allTable[t.TableId()];\
-	table.name = t.className;\
+	table.name = #def_name;\
 	table.tableId = t.TableId();\
 	L_ASSERT((m_tableIds.insert(table.tableId)).second);\
-	L_ASSERT((void*)8 == &(((decltype(t) *)(nullptr))->className));\
-	L_ASSERT(string(t.className) == #def_name);\
 	size_t lastOffset = sizeof(BaseTable);\
 	table.factor = []() {\
 	unique_ptr<BaseTable> p(new def_name());\
@@ -314,7 +310,7 @@ void db::TableCfg::CheckMissField()
 	struct Check##className : public BaseTable\
 	{\
 		using CheckType = className;\
-		Check##className() : BaseTable("none", 0) {}\
+		Check##className() : BaseTable(0) {}\
 
 #define DB_MAIN_KEY(fieldName)\
 		decltype(CheckType::fieldName) fieldName;\

@@ -16,7 +16,7 @@ namespace db
 	//测试用,模板参考用
 	struct PlayerTest : public BaseTable
 	{
-		PlayerTest() : BaseTable("PlayerTest", 1) {}
+		PlayerTest() : BaseTable(1) {}
 		uint64_t id;
 		std::string myblob;
 		std::string name;
@@ -24,7 +24,7 @@ namespace db
 
 	struct Player2 : public BaseTable
 	{
-		Player2() : BaseTable("Player2", 2) {}
+		Player2() : BaseTable(2) {}
 		uint64_t id2;
 		std::string myblob;
 		std::string myblob2;
@@ -36,7 +36,7 @@ namespace db
 
 	struct Player3 : public BaseTable
 	{
-		Player3() : BaseTable("Player3", 3) {}
+		Player3() : BaseTable(3) {}
 		uint64_t id =0;
 		uint32_t id1  =0;
 		uint64_t id2 =0;
@@ -49,7 +49,7 @@ namespace db
 	};
 	struct Player4 : public BaseTable
 	{
-		Player4() : BaseTable("Player4", 4) {}
+		Player4() : BaseTable(4) {}
 		std::string name;
 		std::string idx;
 	};
