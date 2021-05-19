@@ -13,7 +13,7 @@ brief: use example and test code
 #include "db_driver/include/db_driver.h"
 #include "external/svr_util/include/easy_code.h"
 #include "external/svr_util/include/str_util.h"
-#include "proto/dbStructPack.h"
+#include "dbProto/dbStructPack.h"
 
 using namespace std;
 using namespace lc;

@@ -22,8 +22,8 @@ main()
 #include "svr_util/include/singleton.h"
 #include "svr_util/include/easy_code.h"
 #include "svr_util/include/typedef.h"
-#include "proto/dbTableDef.h"
-#include "proto/proto.h"
+#include "dbProto/dbTableDef.h"
+#include "dbProto/proto.h"
 #include "../src/log_def.h"
 
 namespace lc

@@ -10,6 +10,6 @@
 #include "svr_util/include/typedef.h"
 #include "svr_util/include/easy_code.h"
 #include "cfg.h"
-#include "proto/dbTableDef.h"
-#include "proto/proto.h"
+#include "dbProto/dbTableDef.h"
+#include "dbProto/proto.h"
 

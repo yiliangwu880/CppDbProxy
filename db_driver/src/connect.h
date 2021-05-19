@@ -10,7 +10,7 @@
 #include "svr_util/include/easy_code.h"
 #include "svr_util/include/typedef.h"
 #include "db_driver.h"
-#include "proto/proto.h"
+#include "dbProto/proto.h"
 #include "log_def.h"
 
 namespace db {
