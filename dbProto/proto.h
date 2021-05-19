@@ -8,7 +8,7 @@
 
 #pragma pack(push)
 #pragma pack(1)
-namespace proto {
+namespace db {
 	
 	//约定协议前 uint16_t 为 cmdId.
 	struct insert_cs

@@ -115,9 +115,9 @@ namespace db {
 
 		void OnRecv(const lc::MsgPack &msg);
 		//@len 表示 msg 有效长度
-		static void ParseInsert(const proto::insert_sc &msg);
-		static void ParseQuery(const proto::query_sc &msg);
-		static void ParseDel(const proto::del_sc &msg);
-		static void ParseExcuteSql(const proto::excute_sql_sc &msg);
+		static void ParseInsert(const insert_sc &msg);
+		static void ParseQuery(const query_sc &msg);
+		static void ParseDel(const del_sc &msg);
+		static void ParseExcuteSql(const excute_sql_sc &msg);
 	};
 }
