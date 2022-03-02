@@ -1,3 +1,5 @@
 /vs/vs2017
 .vs
 /out
+/dbproxy_svr/out
+/dbproxy_svr/bin
