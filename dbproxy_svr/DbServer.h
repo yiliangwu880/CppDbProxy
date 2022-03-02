@@ -32,11 +32,11 @@ private:
 
 
 	//@len 表示 msg 有效长度
-	static void ParseInsert(InnerSvrCon &con, const proto::insert_cs &req);
-	static void ParseQuery(InnerSvrCon &con, const proto::query_cs &req);
-	static void ParseUpdate(InnerSvrCon &con, const proto::update_cs &req);
-	static void ParseDel(InnerSvrCon &con, const proto::del_cs &req);
-	static void ParseSql(InnerSvrCon &con, const proto::excute_sql_cs &req);
+	static void ParseInsert(InnerSvrCon &con, const db::insert_cs &req);
+	static void ParseQuery(InnerSvrCon &con, const db::query_cs &req);
+	static void ParseUpdate(InnerSvrCon &con, const db::update_cs &req);
+	static void ParseDel(InnerSvrCon &con, const db::del_cs &req);
+	static void ParseSql(InnerSvrCon &con, const db::excute_sql_cs &req);
 };
 
 class DbServer : public lc::Listener<InnerSvrCon>, public Singleton<DbServer>

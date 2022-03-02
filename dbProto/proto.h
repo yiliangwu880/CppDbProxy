@@ -14,12 +14,14 @@ namespace db {
 	struct insert_cs
 	{
 		const uint16_t id = 1;
+		uint16_t sid = 0;
 		uint32_t dataLen; //data有效字节数
 		char data[0]; //任意类型db 对象, 序列化的结果（会省略掉无内容的值，减少流量消耗）。
 	};
 	struct insert_sc
 	{
 		const uint16_t id = 2;
+		uint16_t sid = 0;
 		bool ret;
 		uint32_t dataLen;
 		char data[0]; //有值的内容作为条件
@@ -41,6 +43,7 @@ namespace db {
 	struct query_cs
 	{
 		const uint16_t id = 5;
+		uint16_t sid = 0;
 		uint32_t limit_num = 1;
 		bool isStr = false;		//true表示 data内容为 字符串条件，false表示 data内容为 任意类型db 对象, 序列化的结果
 		uint16_t table_id = 0; //isStr==true的时候用保存 BaseTable::TableId()
@@ -51,6 +54,7 @@ namespace db {
 	struct query_sc
 	{
 		const uint16_t id = 6;
+		uint16_t sid = 0;
 		bool ret;
 		uint32_t dataLen;
 		//一个db 对象. 
@@ -62,12 +66,14 @@ namespace db {
 	struct del_cs
 	{
 		const uint16_t id = 7;
+		uint16_t sid = 0;
 		uint32_t dataLen;
 		char data[0];//有值的内容作为条件
 	};
 	struct del_sc
 	{
 		const uint16_t id = 8;
+		uint16_t sid = 0;
 		bool ret;
 		uint32_t dataLen;
 		char data[0];//有值的内容作为条件

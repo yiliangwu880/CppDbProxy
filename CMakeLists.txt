@@ -17,7 +17,7 @@ INCLUDE_DIRECTORIES(system ./external/mysql_connector/include/)
 INCLUDE_DIRECTORIES(system ./external/libevent_cpp/External/libevent-2.1.8-stable/out/include)
 INCLUDE_DIRECTORIES(after  ${PROJECT_SOURCE_DIR})
 INCLUDE_DIRECTORIES(after  ./external)
-INCLUDE_DIRECTORIES(after  ./proto/)
+INCLUDE_DIRECTORIES(after  ./external/cpp_cfg/)
 
 #运行cmake输出终端消息，调试可以用
 message(PROJECT_SOURCE_DIR_is: ${PROJECT_SOURCE_DIR})
@@ -58,7 +58,7 @@ SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 
 ADD_SUBDIRECTORY(dbproxy_svr)
 ADD_SUBDIRECTORY(db_driver)
-ADD_SUBDIRECTORY(test)
+#ADD_SUBDIRECTORY(test)
 
 #自定义命令
 ##################################

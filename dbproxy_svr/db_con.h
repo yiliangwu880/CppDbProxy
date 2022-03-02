@@ -12,7 +12,7 @@ class IDbCon
 public:
 	virtual ~IDbCon() {};
 
-	virtual bool ConnectDb(const Cfg &cfg) { return false; };
+	virtual bool ConnectDb(const comCfg::S_dbproxy &cfg) { return false; };
 
 	virtual bool InitTable() { return false; }; //创建表， 检查表是否非法
 	virtual bool Insert(const db::BaseTable &req) { return false; };
@@ -29,7 +29,7 @@ class DbConMgr : public Singleton<DbConMgr>
 {
 
 public:
-	bool Init(const Cfg &cfg);
+	bool Init(const comCfg::S_dbproxy &cfg);
 
 	IDbCon &GetCon();
 

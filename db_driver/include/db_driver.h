@@ -19,9 +19,11 @@ main()
 #include <vector>
 #include <unordered_map>
 #include <map>
+#include <any>
 #include "svr_util/include/singleton.h"
 #include "svr_util/include/easy_code.h"
 #include "svr_util/include/typedef.h"
+#include "libevent_cpp/include/timer_mgr.h"
 #include "dbProto/dbTableDef.h"
 #include "dbProto/proto.h"
 #include "../src/log_def.h"
@@ -37,33 +39,49 @@ namespace db {
 	using ConCb = std::function<void()>;
 	using ExcuteSqlCb = std::function<void(uint32_t)>;
 
+	struct DbSession
+	{
+		time_t m_time;
+		std::any para;
+		DbSession() {
+			m_time = time(nullptr);
+		};
+	};
 	//db driver 接口
 	class Dbproxy: public Singleton<Dbproxy>
 	{
 		friend DbClientCon;
 
 	private:
+		uint16_t m_sidSeed=0;
 		ConCb m_conCb;
 		ExcuteSqlCb m_sqlCb;
 		std::unordered_map<uint16_t, void *> m_cmdId2Cb; //proto 消息ID 2 回调
 		std::unordered_map<uint16_t, void *> m_id2QueryCb; //tableID 2 查询回调
 		std::unordered_map<uint16_t, void *> m_id2InertCb;
 		std::unordered_map<uint16_t, void *> m_id2DelCb;
+		lc::Timer m_tm;
+
+		std::unordered_map<uint16_t, DbSession> m_sid2Sn; //sid 2 会话
 
 	public:
 		Dbproxy();
+
+
+		void OnCheckSession(); //30秒调用就可以了
 		void Init(const std::string &ip, uint16_t port, ConCb cb=nullptr, ExcuteSqlCb SqlCb = nullptr);
-		bool Insert(const db::BaseTable &data);
+		bool Insert(const db::BaseTable &data, std::any para = std::any());
 		bool Update(const db::BaseTable &data);//更新数据，没填值的字段不会更新
-		bool Query(const db::BaseTable &data, uint32 limit_num = 1);
+
+		bool Query(const db::BaseTable &data, std::any para= std::any(), uint32 limit_num = 1);
 		//@data 用来识别类型用，值不读取
-		bool Query(const db::BaseTable &data, const std::string &cond, uint32 limit_num = 1);
-		bool Del(const db::BaseTable &data);
+		bool Query(const db::BaseTable &data, const std::string &cond, std::any para = std::any(), uint32 limit_num = 1);
+		bool Del(const db::BaseTable &data, std::any para = std::any());
 		void ExecuteSql(const std::string &sql, uint32_t sql_id=0);
 		//注册查询回调函数
 		//DbTable 为 db::BaseTable的派生类
 		template<class DbTable>
-		void RegQueryCb(void (*fun)(bool, const DbTable& ) )
+		void RegQueryCb(void (*fun)(bool, const DbTable&, std::any) )
 		{
 			DbTable t;
 			if (m_id2QueryCb.find(t.TableId()) != m_id2QueryCb.end())
@@ -74,7 +92,7 @@ namespace db {
 			m_id2QueryCb[t.TableId()] = (void *)fun;
 		}
 		template<class DbTable>
-			void RegInsertCb(void(*fun)(bool, const DbTable&))
+			void RegInsertCb(void(*fun)(bool, const DbTable&, std::any))
 		{
 			DbTable t;
 			if (m_id2InertCb.find(t.TableId()) != m_id2InertCb.end())
@@ -85,7 +103,7 @@ namespace db {
 			m_id2InertCb[t.TableId()] = (void *)fun;
 		}
 		template<class DbTable>
-		void RegDelCb(void(*fun)(bool, const DbTable&))
+		void RegDelCb(void(*fun)(bool, const DbTable&, std::any))
 		{
 			DbTable t;
 			if (m_id2DelCb.find(t.TableId()) != m_id2InertCb.end())

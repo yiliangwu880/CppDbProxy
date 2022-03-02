@@ -4,14 +4,14 @@
 
 #pragma once
 #include "base_include.h"
-#include "cpp_cfg/CC_cfg.h"
+#include "DynamicCfg/comCfg.h"
 
 class CfgMgr : public Singleton<CfgMgr>
 {
 public:
-	bool Init();
-	const Cfg &GetCfg() const { return m_cfg; }
+	comCfg m_comCfg;
 
-private:
-	Cfg m_cfg;
+public:
+	bool Init();
+
 };

@@ -144,7 +144,10 @@ namespace db {
 
 		//@len [in] str 内存长度， [out] str 打包的有效长度
 		bool Pack(const BaseTable &obj, char *str, size_t &len);
+		bool Pack(const BaseTable &obj, std::string &str);//同上方便，但不高效
 		std::unique_ptr<BaseTable> Unpack(const char *str, size_t len);
+		std::unique_ptr<BaseTable> Unpack(const std::string &str) { return Unpack(str.c_str(), str.length()); };
+
 		const Table *GetTable(uint16_t tableId) const;
 		const std::unordered_map<uint16_t, Table> &GetAllTable()const { return m_allTable; }
 	private:
@@ -152,4 +155,5 @@ namespace db {
 		void CheckMissField();
 		void CheckStructField();
 	};
+
 }

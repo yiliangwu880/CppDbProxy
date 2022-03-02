@@ -16,6 +16,8 @@
 	git submodule update			
 	git checkout -f	master		--强制删掉本地分支， track远程master分支
 	去目录 external里面，参考说明编译每个文件夹，生成依赖库。
+	
+	sh run.sh  --CppDbProxy/dbproxy_svr/DynamicCfg 目录执行 sh run.sh 生成配置 h文件
 	主目录执行：sh clearBuild.sh 完成编译
 
 
@@ -26,7 +28,9 @@
 	proto					 ==业务服务器 和 dbproxy_svr 公用的源码
 
 使用方法：
+	
 	编译通过本项目。
+
 	dbproxy_svr table结构变化，需要重新编译。
 	业务服务器。 加入库db_driver（目录db_driver里面有库和头文件），就可以通过db_driver读写db了。
 	详情看：doc.lua

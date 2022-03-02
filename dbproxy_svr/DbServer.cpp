@@ -6,7 +6,6 @@ using namespace std;
 using namespace lc;
 using namespace db;
 using namespace su;
-using namespace proto;
 
 namespace
 {
@@ -57,7 +56,7 @@ void InnerSvrCon::OnRecv(const MsgPack &msg)
 	(*fun)(*this, *(const char *)(msg.data));
 }
 
-void InnerSvrCon::ParseInsert(InnerSvrCon &con, const proto::insert_cs &req)
+void InnerSvrCon::ParseInsert(InnerSvrCon &con, const insert_cs &req)
 {
 	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(req.data, req.dataLen);
 	L_COND_V(nullptr != pTable);
@@ -68,16 +67,18 @@ void InnerSvrCon::ParseInsert(InnerSvrCon &con, const proto::insert_cs &req)
 	insert_sc *rsp = BuildMsgPack<insert_sc>(msg, data);
 	L_COND_V(rsp);
 	rsp->ret = ret;
+	rsp->sid = req.sid;
 	con.SendData(msg);
 }
 
-void InnerSvrCon::ParseQuery(InnerSvrCon &con, const proto::query_cs &req)
+void InnerSvrCon::ParseQuery(InnerSvrCon &con, const query_cs &req)
 {
-	QueryResultRowCb cb = [&con](const db::BaseTable &data)
+	QueryResultRowCb cb = [&con, req](const db::BaseTable &data)
 	{
 		MsgPack msg;
 		query_sc *rsp = BuildMsgPack<query_sc>(msg, data);
 		L_COND_V(rsp);
+		rsp->sid = req.sid;
 		rsp->ret = true;
 		con.SendData(msg);
 	};
@@ -96,6 +97,7 @@ void InnerSvrCon::ParseQuery(InnerSvrCon &con, const proto::query_cs &req)
 			query_sc *rsp = BuildMsgPack<query_sc>(msg, data);
 			L_COND_V(rsp);
 			rsp->ret = false;
+			rsp->sid = req.sid;
 			con.SendData(msg);
 		}
 	}
@@ -110,13 +112,14 @@ void InnerSvrCon::ParseQuery(InnerSvrCon &con, const proto::query_cs &req)
 			MsgPack msg;
 			query_sc *rsp = BuildMsgPack<query_sc>(msg, data);
 			L_COND_V(rsp);
+			rsp->sid = req.sid;
 			rsp->ret = false;
 			con.SendData(msg);
 		}
 	}
 }
 
-void InnerSvrCon::ParseUpdate(InnerSvrCon &con, const proto::update_cs &req)
+void InnerSvrCon::ParseUpdate(InnerSvrCon &con, const update_cs &req)
 {
 	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(req.data, req.dataLen);
 	L_COND_V(nullptr != pTable);
@@ -125,7 +128,7 @@ void InnerSvrCon::ParseUpdate(InnerSvrCon &con, const proto::update_cs &req)
 	DbConMgr::Ins().GetCon().Update(data);
 }
 
-void InnerSvrCon::ParseDel(InnerSvrCon &con, const proto::del_cs &req)
+void InnerSvrCon::ParseDel(InnerSvrCon &con, const del_cs &req)
 {
 	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(req.data, req.dataLen);
 	L_COND_V(nullptr != pTable);
@@ -136,16 +139,17 @@ void InnerSvrCon::ParseDel(InnerSvrCon &con, const proto::del_cs &req)
 	del_sc *rsp = BuildMsgPack<del_sc>(msg, data);
 	L_COND_V(rsp);
 	rsp->ret = ret;
+	rsp->sid = req.sid;
 	con.SendData(msg);
 }
 
-void InnerSvrCon::ParseSql(InnerSvrCon &con, const proto::excute_sql_cs &req)
+void InnerSvrCon::ParseSql(InnerSvrCon &con, const excute_sql_cs &req)
 {
 	string sql(req.data, req.dataLen);
 	bool ret = DbConMgr::Ins().GetCon().ExecuteSql(sql);
 
 	MsgPack msg;
-	proto::excute_sql_sc *rsp = new (msg.data)proto::excute_sql_sc;	msg.len = sizeof(proto::excute_sql_sc);
+	excute_sql_sc *rsp = new (msg.data)excute_sql_sc;	msg.len = sizeof(excute_sql_sc);
 	rsp->sql_id = req.sql_id;
 	con.SendData(msg);
 }

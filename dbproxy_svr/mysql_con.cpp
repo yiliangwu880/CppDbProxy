@@ -55,7 +55,7 @@ namespace
 			{
 			case FieldType::t_bytes:
 			case FieldType::t_string:
-				str += field.name + " = " + *(std::string *)pField; //todo :blob内容，还没解决方案。
+				str += field.name + " = \"" + *(std::string *)pField+"\""; //todo :blob内容，还没解决方案。
 				break;
 #define EASY_CODE(fieldType)\
 			case FieldType::t_##fieldType:\
@@ -215,7 +215,7 @@ bool MysqlCon::Insert(const db::BaseTable &data)
 		return true;
 	}
 	catch (sql::SQLException &e) {
-		L_ERROR("%s, MySQL error code:%d, SQLState:%s", e.what(), e.getErrorCode(), e.getSQLStateCStr());
+		L_DEBUG("%s, MySQL error code:%d, SQLState:%s", e.what(), e.getErrorCode(), e.getSQLStateCStr());
 		return false;
 	}
 }
@@ -271,7 +271,7 @@ MysqlCon::~MysqlCon()
 	}
 }
 
-bool MysqlCon::ConnectDb(const Cfg &cfg)
+bool MysqlCon::ConnectDb(const comCfg::S_dbproxy &cfg)
 {
 	L_COND_F(nullptr == m_con);
 	try {
@@ -283,10 +283,16 @@ bool MysqlCon::ConnectDb(const Cfg &cfg)
 		connection_properties["password"]      = mysql_db.db_psw;
 		connection_properties["OPT_RECONNECT"] = true;
 
+		L_DEBUG("ip port = %s, %d, db_name=%s", mysql_db.db_ip.c_str(), mysql_db.db_port, mysql_db.db_name.c_str());
 		L_DEBUG("try connect mysql db[%s].\n %s %d this may need a few minute!", mysql_db.db_user.c_str()
 			, mysql_db.db_ip.c_str(), mysql_db.db_port);
 		sql::Driver* driver = sql::mysql::get_driver_instance();
 		m_con = driver->connect(connection_properties);
+		
+		string s = su::StrFormat::format("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARSET utf8 COLLATE utf8_general_ci;", mysql_db.db_name.c_str());
+		std::unique_ptr<sql::PreparedStatement> pstmt(m_con->prepareStatement(s));
+		pstmt->execute();
+
 		m_con->setSchema(mysql_db.db_name);
 		L_DEBUG("connect mysql db ok");
 		InitTable();
@@ -501,10 +507,17 @@ bool MysqlCon::Query(const db::BaseTable &data, uint32_t limit_num, QueryResultR
 		do
 		{
 			unique_ptr<sql::ResultSet> ret(stmt->getResultSet());
-			if (0 == row_num && nullptr == ret) //一个数据都没有
+			if ( nullptr == ret) //一个数据都没有
 			{
-				L_ERROR("execute sql fail [%s]", sql_str.c_str());
-				return false;
+				if (row_num == 0)
+				{
+					L_ERROR("execute sql fail [%s]", sql_str.c_str());
+					return false;
+				}
+				else
+				{
+					break;
+				}
 			}
 			while (ret->next()) {
 				unique_ptr<db::BaseTable> pData = table->factor();
@@ -517,15 +530,15 @@ bool MysqlCon::Query(const db::BaseTable &data, uint32_t limit_num, QueryResultR
 					}
 				}
 				cb(*pData);
+				row_num++;
 			}
-			row_num++;
 
 			if (!stmt->getMoreResults())
 			{
 				break;
 			}
 		} while(true);
-		return true;
+		return row_num > 0;
 	}
 	catch (sql::SQLException &e) {
 		L_ERROR("%s, MySQL error code:%d, SQLState:%s", e.what(), e.getErrorCode(), e.getSQLStateCStr());
@@ -553,10 +566,17 @@ bool MysqlCon::Query(uint16_t table_id, std::string &cond, uint32_t limit_num, Q
 		do
 		{
 			unique_ptr<sql::ResultSet> ret(stmt->getResultSet());
-			if (0 == row_num && nullptr == ret) //一个数据都没有
+			if ( nullptr == ret) //一个数据都没有
 			{
-				L_ERROR("execute sql fail [%s]", sql_str.c_str());
-				return false;
+				if (row_num == 0)
+				{
+					L_ERROR("execute sql fail [%s]", sql_str.c_str());
+					return false;
+				}
+				else
+				{
+					break;
+				}
 			}
 			while (ret->next()) {
 				unique_ptr<db::BaseTable> pData = table->factor();
@@ -569,15 +589,15 @@ bool MysqlCon::Query(uint16_t table_id, std::string &cond, uint32_t limit_num, Q
 					}
 				}
 				cb(*pData);
+				row_num++;
 			}
-			row_num++;
 
 			if (!stmt->getMoreResults())
 			{
 				break;
 			}
 		} while (true);
-		return true;
+		return row_num > 0;
 	}
 	catch (sql::SQLException &e) {
 		L_ERROR("%s, MySQL error code:%d, SQLState:%s", e.what(), e.getErrorCode(), e.getSQLStateCStr());

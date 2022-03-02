@@ -9,29 +9,28 @@ using namespace std;
 using namespace lc;
 using namespace su;
 using namespace db;
-using namespace proto;
 
 namespace
 {
-	//°Ñ BaseTable¶ÔÏó ºÍ Ğ­Òé½á¹¹ProtoType  ¹¹½¨ÔÚ MsgPack,²¢ÉèÖÃMsgPack::len¡£ProtoType ÆäËû×Ö¶ÎÄÚÈİÎ´¸³Öµ¡£
-	//ÀàËÆÏÂÃæµÄ½á¹¹£ºdataLen data[0]±ØĞë×îºó¶¨Òå£¬´æ·Ådb ¶ÔÏó
+	//æŠŠ BaseTableå¯¹è±¡ å’Œ åè®®ç»“æ„ProtoType  æ„å»ºåœ¨ MsgPack,å¹¶è®¾ç½®MsgPack::lenã€‚ProtoType å…¶ä»–å­—æ®µå†…å®¹æœªèµ‹å€¼ã€‚
+	//ç±»ä¼¼ä¸‹é¢çš„ç»“æ„ï¼šdataLen data[0]å¿…é¡»æœ€åå®šä¹‰ï¼Œå­˜æ”¾db å¯¹è±¡
 	//	struct query_sc
 	//{
 	//	const uint16_t id = 6;
-	//	bool ret;  //ÆäËûÄÚÈİ
+	//	bool ret;  //å…¶ä»–å†…å®¹
 	//  uint32_t dataLen;
-	//	char data[0]; //Ò»¸ödb ¶ÔÏó
+	//	char data[0]; //ä¸€ä¸ªdb å¯¹è±¡
 	//};
 	template<class ProtoType>
 	ProtoType *BuildMsgPack(MsgPack &msg, const db::BaseTable &data)
 	{
-		//ÒªÇódataLen data[0]±ØĞë×îºó¶¨Òå
+		//è¦æ±‚dataLen data[0]å¿…é¡»æœ€åå®šä¹‰
 		static_assert((size_t)&(((ProtoType *)(nullptr))->dataLen) == sizeof(ProtoType)-sizeof(uint32_t));
 		static_assert((size_t)&(((ProtoType *)(nullptr))->data) == sizeof(ProtoType));
-		static_assert((size_t)&(((ProtoType *)(nullptr))->id) == 0); //id±ØĞëÊ×ÏÈ¶¨Òå
+		static_assert((size_t)&(((ProtoType *)(nullptr))->id) == 0); //idå¿…é¡»é¦–å…ˆå®šä¹‰
 
 		ProtoType *p = new (msg.data)ProtoType;
-		//data¿ÉÓÃ³¤¶È
+		//dataå¯ç”¨é•¿åº¦
 		size_t len = ArrayLen(msg.data) - sizeof(*p);
 		if (!TableCfg::Ins().Pack(data, p->data, len))		{
 			L_ERROR("pack fail");			return nullptr;		}		p->dataLen = len;		msg.len = sizeof(ProtoType) + len;		return p;	}
@@ -45,18 +44,54 @@ db::Dbproxy::Dbproxy()
 	RegProtoParse(ParseExcuteSql);
 }
 
+namespace
+{
+	template<class M>
+	void Check(M &m_sid2QuerySn)
+	{
+		std::vector<uint16_t> vecSid;
+		time_t now = time(nullptr);
+		for (auto &v : m_sid2QuerySn)
+		{
+			const DbSession &sn = v.second;
+			if (sn.m_time - now > 30)
+			{
+				vecSid.push_back(v.first);
+			}
+		}
+		for (auto &id : vecSid)
+		{
+			m_sid2QuerySn.erase(id);
+		}
+	}
+}
+void db::Dbproxy::OnCheckSession()
+{
+	Check(m_sid2Sn);
+
+}
+
 void db::Dbproxy::Init(const std::string &ip, uint16_t port, ConCb cb, ExcuteSqlCb sqlCb)
 {
 	DbClientCon::Ins().ConnectInit(ip.c_str(), port);
 	m_conCb = cb;
 	m_sqlCb = sqlCb;
+
+	lc::Timer tm;
+	m_tm.StartTimerSec(30, std::bind(&Dbproxy::OnCheckSession, this), true);
 }
 
-bool db::Dbproxy::Insert(const db::BaseTable &data)
+bool db::Dbproxy::Insert(const db::BaseTable &data, any para)
 {
+	m_sidSeed++;
+	DbSession sn;
+	sn.para = para;
+	m_sid2Sn.emplace(make_pair(m_sidSeed, sn));
+
 	MsgPack msg;
 	auto p = BuildMsgPack<insert_cs>(msg, data);
 	L_COND(p, false);
+	p->sid = m_sidSeed;
 	return DbClientCon::Ins().SendData(msg);
 }
 
@@ -68,20 +103,32 @@ bool db::Dbproxy::Update(const db::BaseTable &data)
 	return DbClientCon::Ins().SendData(msg);
 }
 
-bool db::Dbproxy::Query(const db::BaseTable &data, uint32 limit_num/*=1*/)
+bool db::Dbproxy::Query(const db::BaseTable &data, any para, uint32 limit_num /*= 1*/)
 {
+	m_sidSeed++;
+	DbSession sn;
+	sn.para = para;
+	m_sid2Sn.emplace(make_pair(m_sidSeed, sn));
+
 	MsgPack msg;
 	auto req = BuildMsgPack<query_cs>(msg, data);
 	L_COND(req, false);
+	req->sid = m_sidSeed;
 	req->isStr = false;
 	req->limit_num = limit_num;
 	return DbClientCon::Ins().SendData(msg);
 }
 
-bool db::Dbproxy::Query(const db::BaseTable &data, const std::string &cond, uint32 limit_num /*= 1*/)
+bool db::Dbproxy::Query(const db::BaseTable &data, const std::string &cond, any para, uint32 limit_num /*= 1*/)
 {
+	m_sidSeed++;
+	DbSession sn;
+	sn.para = para;
+	m_sid2Sn.emplace(make_pair(m_sidSeed, sn));
+
 	MsgPack msg;
 	query_cs *req = new (msg.data)query_cs;
+	req->sid = m_sidSeed;
 	req->limit_num = limit_num;
 	req->isStr = true;
 	req->table_id = data.TableId();
@@ -89,25 +136,30 @@ bool db::Dbproxy::Query(const db::BaseTable &data, const std::string &cond, uint
 	return DbClientCon::Ins().SendData(msg);
 }
 
-bool db::Dbproxy::Del(const db::BaseTable &data)
+bool db::Dbproxy::Del(const db::BaseTable &data, any para)
 {
+	m_sidSeed++;
+	DbSession sn;
+	sn.para = para;
+	m_sid2Sn.emplace(make_pair(m_sidSeed, sn));
 	MsgPack msg;
 	auto p = BuildMsgPack<del_cs>(msg, data);
 	L_COND(p, false);
+	p->sid = m_sidSeed;
 	return DbClientCon::Ins().SendData(msg);
 }
 
 void db::Dbproxy::ExecuteSql(const std::string &sql, uint32_t sql_id)
 {
 	MsgPack msg;
-	proto::excute_sql_cs *req = new (msg.data)proto::excute_sql_cs;	req->sql_id = sql_id;	L_COND_V(sql.length() + sizeof(*req) < sizeof(msg.data));	req->dataLen = sql.length();	memcpy(req->data, sql.c_str(), sql.length());	msg.len = sizeof(*req) + req->dataLen;
+	excute_sql_cs *req = new (msg.data)excute_sql_cs;	req->sql_id = sql_id;	L_COND_V(sql.length() + sizeof(*req) < sizeof(msg.data));	req->dataLen = sql.length();	memcpy(req->data, sql.c_str(), sql.length());	msg.len = sizeof(*req) + req->dataLen;
 	DbClientCon::Ins().SendData(msg);
 }
 
 void db::Dbproxy::OnRecv(const lc::MsgPack &msg)
 {
-	using ComFun = void(const char &); //ÏûÏ¢»Øµ÷º¯Êı£¬ ³éÏóÀàĞÍ¡£ 
-	uint16_t cmdId = *(const uint16_t *)msg.data; //Ô¼¶¨Ğ­ÒéÇ° uint16_t Îª cmdId. ±ÈÈç 
+	using ComFun = void(const char &); //æ¶ˆæ¯å›è°ƒå‡½æ•°ï¼Œ æŠ½è±¡ç±»å‹ã€‚ 
+	uint16_t cmdId = *(const uint16_t *)msg.data; //çº¦å®šåè®®å‰ uint16_t ä¸º cmdId. æ¯”å¦‚ 
 	auto it = m_cmdId2Cb.find(cmdId);
 	if (it == m_cmdId2Cb.end())
 	{
@@ -119,51 +171,61 @@ void db::Dbproxy::OnRecv(const lc::MsgPack &msg)
 	(*fun)(*pMsg);
 }
 
-void db::Dbproxy::ParseInsert(const proto::insert_sc &msg)
+void db::Dbproxy::ParseInsert(const insert_sc &msg)
 {
 	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(msg.data, msg.dataLen);
 	L_COND_V(nullptr != pTable);
 
-	using ComFun = void(bool, const BaseTable& ); //²éÑ¯»Øµ÷£¬ ³éÏóÀàĞÍ¡£ 
+	using ComFun = void(bool, const BaseTable&, std::any); //æŸ¥è¯¢å›è°ƒï¼Œ æŠ½è±¡ç±»å‹ã€‚ 
 	ComFun **fun = (ComFun **)(su::MapFind(Dbproxy::Ins().m_id2InertCb, pTable->TableId()));
 	if (nullptr == fun)
 	{
 		return;
 	}
-	(**fun)(msg.ret, *(pTable.get()));
+	
+	auto it = Dbproxy::Ins().m_sid2Sn.find(msg.sid);
+	L_COND_V(it != Dbproxy::Ins().m_sid2Sn.end());
+	(**fun)(msg.ret, *(pTable.get()), (it->second).para);
+	Dbproxy::Ins().m_sid2Sn.erase(it);
 }
 
-void db::Dbproxy::ParseQuery(const proto::query_sc &msg)
+void db::Dbproxy::ParseQuery(const query_sc &msg)
 {
 	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(msg.data, msg.dataLen);
 	L_COND_V(nullptr != pTable);
 
-	using ComFun = void(bool, const BaseTable&); //²éÑ¯»Øµ÷£¬ ³éÏóÀàĞÍ¡£ 
+	using ComFun = void(bool, const BaseTable&, std::any); //æŸ¥è¯¢å›è°ƒï¼Œ æŠ½è±¡ç±»å‹ã€‚ 
 	ComFun **fun = (ComFun **)(su::MapFind(Dbproxy::Ins().m_id2QueryCb, pTable->TableId()));
 	if (nullptr == fun)
 	{
 		return;
 	}
-	(**fun)(msg.ret, *(pTable.get()));
+	auto it = Dbproxy::Ins().m_sid2Sn.find(msg.sid);
+	L_COND_V(it != Dbproxy::Ins().m_sid2Sn.end());
+	(**fun)(msg.ret, *(pTable.get()), (it->second).para);
+	Dbproxy::Ins().m_sid2Sn.erase(it);
 }
 
 
 
-void db::Dbproxy::ParseDel(const proto::del_sc &msg)
+void db::Dbproxy::ParseDel(const del_sc &msg)
 {
 	std::unique_ptr<BaseTable> pTable = TableCfg::Ins().Unpack(msg.data, msg.dataLen);
 	L_COND_V(nullptr != pTable);
 
-	using ComFun = void(bool, const BaseTable&); //²éÑ¯»Øµ÷£¬ ³éÏóÀàĞÍ¡£ 
+	using ComFun = void(bool, const BaseTable&, std::any); //æŸ¥è¯¢å›è°ƒï¼Œ æŠ½è±¡ç±»å‹ã€‚ 
 	ComFun **fun = (ComFun **)(su::MapFind(Dbproxy::Ins().m_id2DelCb, pTable->TableId()));
 	if (nullptr == fun)
 	{
 		return;
 	}
-	(**fun)(msg.ret, *(pTable.get()));
+	auto it = Dbproxy::Ins().m_sid2Sn.find(msg.sid);
+	L_COND_V(it != Dbproxy::Ins().m_sid2Sn.end());
+	(**fun)(msg.ret, *(pTable.get()), (it->second).para);
+	Dbproxy::Ins().m_sid2Sn.erase(it);
 }
 
-void db::Dbproxy::ParseExcuteSql(const proto::excute_sql_sc &msg)
+void db::Dbproxy::ParseExcuteSql(const excute_sql_sc &msg)
 {
 	if (Dbproxy::Ins().m_sqlCb)
 	{

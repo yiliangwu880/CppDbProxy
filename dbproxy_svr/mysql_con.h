@@ -16,7 +16,7 @@ private:
 public:
 	virtual ~MysqlCon();
 
-	virtual bool ConnectDb(const Cfg &cfg) override;
+	virtual bool ConnectDb(const comCfg::S_dbproxy &cfg) override;
 
 	virtual bool InitTable() override; //创建表， 检查表是否非法
 	virtual bool Insert(const db::BaseTable &data)override;

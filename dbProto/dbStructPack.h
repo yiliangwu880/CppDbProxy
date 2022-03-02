@@ -27,6 +27,29 @@ namespace db
 		return false;
 	}
 
+	//间接调用 Pack Unpack,提供std::string接口
+	template<class T>
+	inline bool PackStr(const T &t, std::string &str) 
+	{
+		str.clear();
+		size_t len = 1024 * 2;
+		str.resize(len);
+		char *cur = (char *)str.c_str();
+		if (!Pack(t, cur, len))
+		{
+			return false;
+		}
+		len = str.length() - len;
+		str.resize(len);
+		return true;
+	}
+	template<class T>
+	inline bool UnpackStr(T &t, const std::string &str)
+	{
+		const char *cur = str.c_str();
+		size_t len = str.length();
+		return Unpack(t, cur, len);
+	}
 
 #define EASY_CODE(T)\
 	template<>\
