@@ -3,7 +3,7 @@
 
 mkdir -p Debug
 cd Debug
-rm * -rf
+rm -rf *
 cd ..
-make
+sh build.sh
 
